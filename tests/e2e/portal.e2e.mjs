@@ -227,7 +227,15 @@ try {
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/poster`);
   await a.waitForSelector("text=Escanea para elegir tu regalo");
   assert((await a.locator("[data-elf][data-mascot='banana']").count()) === 1, "poster shows the chosen mascot");
+  assert((await a.locator("[data-poster-gift]").count()) === 4, "poster lists the 4 gifts shown in the campaign");
+  const posterMugImg = await a.locator("[data-poster-gift]", { hasText: `E2E Mug ${run}` }).locator("img").getAttribute("src");
+  assert(posterMugImg && posterMugImg.includes("/api/images/") && posterMugImg.includes("thumb=1"), "poster uses the gift thumbnails");
+  assert((await a.locator("[data-poster-gift]", { hasText: "Company Hoodie" }).locator("text=Sudadera con capucha de la empresa").count()) === 1, "poster shows the Spanish name under each gift");
   await shot(a, "poster");
+  await a.click("[data-poster-gifts-toggle]");
+  await a.waitForURL(/poster\?gifts=0/);
+  assert((await a.locator("[data-poster-gifts]").count()) === 0, "gifts section can be hidden for a QR-only poster");
+  ok("poster shows gift thumbnails (bilingual names) and can hide them");
 
   section("Employee flow in Spanish: identity check with employee number + last name");
   const emp = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 1, locale: "es-MX" });

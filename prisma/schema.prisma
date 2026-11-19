@@ -1,0 +1,242 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdminRole {
+  ADMIN
+  HR
+}
+
+enum CampaignStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum ItemType {
+  PRODUCT
+  CUSTOM
+}
+
+enum CampaignItemStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+}
+
+enum SelectionStatus {
+  SELECTED
+  NEEDS_REPICK
+  ORDERED
+  RECEIVED
+  COLLECTED
+}
+
+enum EmailStatus {
+  SENT
+  FAILED
+  LOGGED
+}
+
+enum ActorType {
+  ADMIN
+  EMPLOYEE
+  SYSTEM
+}
+
+model AdminUser {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  passwordHash    String?
+  role            AdminRole @default(ADMIN)
+  active          Boolean   @default(true)
+  inviteToken     String?   @unique
+  inviteExpiresAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Employee {
+  id             String             @id @default(cuid())
+  employeeNumber String             @unique
+  firstName      String
+  lastName       String
+  department     String?
+  active         Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  campaigns      CampaignEmployee[]
+  selections     Selection[]
+}
+
+model Campaign {
+  id                      String         @id @default(cuid())
+  slug                    String         @unique
+  name                    String
+  status                  CampaignStatus @default(DRAFT)
+  opensAt                 DateTime?
+  closesAt                DateTime?
+  requireLastName         Boolean        @default(true)
+  allEmployeesEligible    Boolean        @default(true)
+  allowChangeUntilOrdered Boolean        @default(true)
+  showSoldOutItems        Boolean        @default(true)
+  hrEmails                String[]       @default([])
+
+  // Content (English + optional Spanish)
+  welcomeHeadline      String  @default("Choose your gift")
+  welcomeHeadlineEs    String?
+  welcomeMessage       String  @default("")
+  welcomeMessageEs     String?
+  pickupInstructions   String  @default("")
+  pickupInstructionsEs String?
+  leadershipMessage    String?
+  leadershipMessageEs  String?
+  leadershipName       String?
+
+  // Branding
+  logoImageId  String?
+  heroImageId  String?
+  primaryColor String  @default("#1d4ed8")
+  accentColor  String  @default("#f59e0b")
+  companyName  String?
+
+  // Budget
+  totalBudget           Decimal? @db.Decimal(12, 2)
+  defaultEmployeeBudget Decimal? @db.Decimal(12, 2)
+  hideItemsOverBudget   Boolean  @default(false)
+  currency              String   @default("USD")
+
+  // Integrations
+  feedToken     String    @unique @default(cuid())
+  digestEnabled Boolean   @default(false)
+  lastHrEmailAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees  CampaignEmployee[]
+  items      CampaignItem[]
+  selections Selection[]
+  emails     EmailLog[]
+}
+
+model CampaignEmployee {
+  campaignId     String
+  employeeId     String
+  budgetOverride Decimal? @db.Decimal(12, 2)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, employeeId])
+}
+
+model Item {
+  id              String         @id @default(cuid())
+  type            ItemType       @default(PRODUCT)
+  name            String
+  nameEs          String?
+  description     String         @default("")
+  descriptionEs   String?
+  category        String?
+  imageId         String?
+  imageUrl        String?
+  productUrl      String?
+  asin            String?
+  sku             String?
+  unitCost        Decimal?       @db.Decimal(12, 2)
+  fulfillmentNote String?
+  optionLabel     String?
+  optionValues    String[]       @default([])
+  active          Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  campaigns       CampaignItem[]
+  selections      Selection[]
+}
+
+model CampaignItem {
+  campaignId       String
+  itemId           String
+  sortOrder        Int                @default(0)
+  status           CampaignItemStatus @default(AVAILABLE)
+  stockLimit       Int?
+  unitCostOverride Decimal?           @db.Decimal(12, 2)
+  campaign         Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  item             Item               @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, itemId])
+}
+
+model Selection {
+  id               String          @id @default(cuid())
+  campaignId       String
+  employeeId       String
+  itemId           String
+  optionValue      String?
+  confirmationCode String          @unique
+  costAtSelection  Decimal?        @db.Decimal(12, 2)
+  status           SelectionStatus @default(SELECTED)
+  language         String          @default("en")
+  selectedAt       DateTime        @default(now())
+  orderedAt        DateTime?
+  receivedAt       DateTime?
+  collectedAt      DateTime?
+  notes            String?
+  updatedAt        DateTime        @updatedAt
+  campaign         Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  employee         Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  item             Item            @relation(fields: [itemId], references: [id])
+
+  @@unique([campaignId, employeeId])
+  @@index([campaignId, status])
+  @@index([campaignId, itemId])
+}
+
+model Image {
+  id        String   @id @default(cuid())
+  mime      String
+  data      Bytes
+  thumb     Bytes
+  width     Int
+  height    Int
+  createdAt DateTime @default(now())
+}
+
+model EmailLog {
+  id          String      @id @default(cuid())
+  campaignId  String?
+  to          String[]
+  subject     String
+  status      EmailStatus
+  error       String?
+  body        String
+  attachments String[]    @default([])
+  sentAt      DateTime    @default(now())
+  campaign    Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, sentAt])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  actorType  ActorType
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  meta       Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model Setting {
+  key   String @id
+  value String
+}

@@ -1,0 +1,91 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { dict, fill, formatDate, localized } from "@/i18n";
+import { getEmployeeSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { imageSrc } from "@/lib/image-src";
+import { getLang } from "@/lib/lang";
+import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
+import { loadCampaign } from "../campaign";
+
+export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) {
+  const { slug } = await params;
+  const [campaign, lang] = await Promise.all([loadCampaign(slug), getLang()]);
+  const t = dict(lang);
+  const session = await getEmployeeSession(campaign.id);
+  if (!session) redirect(`/g/${slug}`);
+
+  const [selection, employee] = await Promise.all([
+    db.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: session.employeeId } }, include: { item: true } }),
+    db.employee.findUniqueOrThrow({ where: { id: session.employeeId } }),
+  ]);
+  if (!selection) redirect(`/g/${slug}/pick`);
+  if (selection.status === "NEEDS_REPICK" && campaignAcceptsPicks(campaign).ok) redirect(`/g/${slug}/pick`);
+
+  const name = localized(lang, selection.item.name, selection.item.nameEs);
+  const src = imageSrc(selection.item, false);
+  const canChange = campaignAcceptsPicks(campaign).ok && canChangeSelection(selection.status, campaign.allowChangeUntilOrdered);
+  const pickup = localized(lang, campaign.pickupInstructions, campaign.pickupInstructionsEs) || t.done.pickupDefault;
+  const statusLabel = t.done.statuses[selection.status as keyof typeof t.done.statuses] ?? selection.status;
+
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-10">
+      <div className="card overflow-hidden">
+        <div className="p-6 text-center" style={{ background: `linear-gradient(135deg, ${campaign.primaryColor}, ${campaign.accentColor})` }}>
+          <div className="text-4xl">🎉</div>
+          <h1 className="mt-2 text-2xl font-bold text-white">{fill(t.done.thanks, { name: employee.firstName })}</h1>
+        </div>
+        <div className="grid gap-6 p-6 sm:grid-cols-5">
+          <div className="sm:col-span-2">
+            <div className="aspect-square overflow-hidden rounded-xl bg-slate-100">
+              {src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt={name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center text-6xl">🎁</div>
+              )}
+            </div>
+          </div>
+          <div className="sm:col-span-3">
+            <p className="text-sm uppercase tracking-wide text-slate-500">{t.done.youChose}</p>
+            <h2 className="text-xl font-semibold text-slate-900">{name}</h2>
+            {selection.optionValue && (
+              <p className="text-slate-700">
+                {selection.item.optionLabel}: <strong>{selection.optionValue}</strong>
+              </p>
+            )}
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <dt className="text-slate-500">{t.done.confirmationCode}</dt>
+                <dd className="font-mono text-lg font-bold tracking-wider text-slate-900">{selection.confirmationCode}</dd>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <dt className="text-slate-500">{t.done.status}</dt>
+                <dd className="font-semibold text-slate-900">{statusLabel}</dd>
+                <dd className="text-xs text-slate-500">{formatDate(selection.selectedAt, lang)}</dd>
+              </div>
+            </dl>
+            <div className="mt-5">
+              <h3 className="font-semibold text-slate-900">{t.done.pickupTitle}</h3>
+              <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{pickup}</p>
+            </div>
+            <p className="mt-4 text-xs text-slate-500">{t.done.saveThis}</p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {canChange ? (
+                <Link href={`/g/${slug}/pick?change=1`} className="btn-secondary">
+                  {t.done.changeGift}
+                </Link>
+              ) : (
+                <p className="text-xs text-slate-500">{t.done.lockedHint}</p>
+              )}
+              <a href={`/g/${slug}/logout`} className="btn-ghost">
+                {fill(t.pick.notYou, { name: employee.firstName })}
+              </a>
+            </div>
+            {canChange && <p className="mt-2 text-xs text-slate-500">{t.done.changeHint}</p>}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

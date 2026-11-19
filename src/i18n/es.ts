@@ -63,6 +63,7 @@ export const es: Dictionary = {
     repickBody: "{item} se ha agotado. Por favor elige un regalo diferente.",
     repickButton: "Elegir otro regalo",
     saveThis: "Toma una captura de pantalla de esta página para tus registros.",
+    showAtPickup: "Muestra este código QR (o tu código de confirmación) al recoger tu regalo.",
     statuses: {
       SELECTED: "Seleccionado",
       NEEDS_REPICK: "Requiere nueva elección",

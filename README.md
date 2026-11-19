@@ -10,7 +10,7 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - QR code → campaign landing page with company logo, colours, hero image, welcome message and a message from leadership.
 - Identity check: employee number + last name (case- and accent-insensitive; "cruz" matches "de la Cruz"). Rate-limited. Generic error for mismatches.
 - Photo card grid with search and category filter; detail view with large photo, description, product link and option picker (size/colour).
-- One pick per campaign. Locked after confirming (configurable: allow changes until HR orders). Confirmation code + pickup instructions.
+- One pick per campaign. Locked after confirming (configurable: allow changes until HR orders). Confirmation code shown as text and as a QR code to present at pickup, plus pickup instructions.
 - Budget-aware: items above the employee's budget are greyed out (or hidden). Stock limits show "Only N left" / "Sold out".
 - If HR marks their gift out of stock, the employee is asked to re-pick on their next visit.
 - English/Spanish toggle, defaulting to the browser language; campaign and item text can be entered in both languages.
@@ -20,6 +20,7 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - Campaigns: choose which gifts to show and in what order, per-campaign stock limits and cost overrides, mark out of stock (affected employees flagged for re-pick).
 - Employees: master list with CSV import (`employee_number, first_name, last_name, department, budget`), per-campaign eligibility and budget tiers, pick on behalf of a walk-up employee, reset a selection.
 - Orders: main list grouped by gift (quantities, unit cost, subtotal, Amazon link), custom gifts in their own section, per-row and bulk status changes (to order → ordered → received → collected), pickup-day search by employee number.
+- Pickup kiosk (`/admin/campaigns/<id>/kiosk`): full-screen page for the front desk. Scan the QR code on the employee's confirmation page with the device camera (BarcodeDetector where available, jsQR fallback), or type/USB-scan the confirmation code, employee number or name; see who they are and what they chose; mark collected in one tap with undo. Live collected/ready counters.
 - Budget: total vs committed vs ordered, spend per gift, per-employee budget vs cost with over-budget flags.
 - HR email: HTML summary + `orders.xlsx` (Summary, Detail, Budget, Not picked, Info) + two CSVs. Full list or only new since last email. Optional scheduled digest. Email history with preview.
 - Live spreadsheet feed: a secret URL per campaign that Excel ("Get Data → From Web") or Google Sheets (`IMPORTDATA`) can refresh automatically.
@@ -75,6 +76,7 @@ src/app/(employee)/g/[slug]/      landing (identity form), pick (photo grid), do
 src/app/admin/(auth)/             login, forgot/set password
 src/app/admin/(app)/              dashboard, campaigns/[id]/{items,employees,orders,budget,emails,branding,settings}, items, employees, settings/users
 src/app/admin/(print)/            printable QR poster
+src/app/admin/(kiosk)/            pickup-day kiosk with camera scanning
 src/app/api/                      images, QR, admin exports, live feed, cron digest, health
 src/lib/selection.ts              identity check, availability, budget, transactional pick, re-pick, status changes
 src/lib/report.ts                 one data builder behind Orders, Budget, HR email, CSV and Excel
@@ -98,4 +100,4 @@ Uploading on a campaign's Employees tab marks those people eligible for that cam
 
 ## Ideas for later
 
-Scheduled reminder exports for people who haven't picked, pickup-day kiosk mode with code scanning, employee notifications when gifts arrive, analytics by department, points-based multi-item campaigns, more languages, Amazon Product Advertising API for price sync, manager approval for custom perks, SSO for admins.
+Scheduled reminder exports for people who haven't picked, employee notifications when gifts arrive, analytics by department, points-based multi-item campaigns, more languages, Amazon Product Advertising API for price sync, manager approval for custom perks, SSO for admins.

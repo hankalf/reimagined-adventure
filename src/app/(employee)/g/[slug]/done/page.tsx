@@ -5,6 +5,7 @@ import { getEmployeeSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { imageSrc } from "@/lib/image-src";
 import { getLang } from "@/lib/lang";
+import { qrDataUrl } from "@/lib/qr";
 import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
 
@@ -27,6 +28,7 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
   const canChange = campaignAcceptsPicks(campaign).ok && canChangeSelection(selection.status, campaign.allowChangeUntilOrdered);
   const pickup = localized(lang, campaign.pickupInstructions, campaign.pickupInstructionsEs) || t.done.pickupDefault;
   const statusLabel = t.done.statuses[selection.status as keyof typeof t.done.statuses] ?? selection.status;
+  const codeQr = await qrDataUrl(selection.confirmationCode, 220);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -65,6 +67,11 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
                 <dd className="text-xs text-slate-500">{formatDate(selection.selectedAt, lang)}</dd>
               </div>
             </dl>
+            <div className="mt-4 flex items-center gap-4 rounded-lg border border-dashed border-slate-300 p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={codeQr} alt={selection.confirmationCode} width={110} height={110} className="h-[110px] w-[110px] shrink-0 rounded bg-white" />
+              <p className="text-sm text-slate-700">{t.done.showAtPickup}</p>
+            </div>
             <div className="mt-5">
               <h3 className="font-semibold text-slate-900">{t.done.pickupTitle}</h3>
               <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{pickup}</p>

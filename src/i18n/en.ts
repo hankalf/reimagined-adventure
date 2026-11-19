@@ -61,6 +61,7 @@ export const en = {
     repickBody: "{item} has run out. Please choose a different gift below.",
     repickButton: "Choose a different gift",
     saveThis: "Take a screenshot of this page for your records.",
+    showAtPickup: "Show this QR code (or your confirmation code) when you collect your gift.",
     statuses: {
       SELECTED: "Selected",
       NEEDS_REPICK: "Needs a new choice",

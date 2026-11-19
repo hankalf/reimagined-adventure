@@ -153,7 +153,10 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
             <option value="NEEDS_REPICK">Needs re-pick</option>
           </select>
           <button className="btn-secondary">Filter</button>
-          <a href={`/api/export/${id}?type=detail`} className="btn-ghost btn-sm ml-auto">
+          <a href={`/admin/campaigns/${id}/kiosk`} target="_blank" rel="noreferrer" className="btn-primary btn-sm ml-auto">
+            📷 Open pickup kiosk
+          </a>
+          <a href={`/api/export/${id}?type=detail`} className="btn-ghost btn-sm">
             ⬇ Detail CSV
           </a>
         </form>

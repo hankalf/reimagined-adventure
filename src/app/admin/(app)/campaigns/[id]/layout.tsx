@@ -32,6 +32,9 @@ export default async function CampaignLayout({ children, params }: LayoutProps<"
           <Link href={`/admin/campaigns/${id}/poster`} className="btn-secondary" target="_blank">
             🖨️ QR poster
           </Link>
+          <Link href={`/admin/campaigns/${id}/kiosk`} className="btn-secondary" target="_blank">
+            📷 Pickup kiosk
+          </Link>
           {campaign.status !== "OPEN" ? (
             <form action={setCampaignStatusAction}>
               <input type="hidden" name="id" value={id} />

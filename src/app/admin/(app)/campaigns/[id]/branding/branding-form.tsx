@@ -208,15 +208,18 @@ export function BrandingForm({ campaign }: { campaign: Branding }) {
           <div className="space-y-4">
             <fieldset>
               <legend className="label">Character</legend>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8" data-mascot-picker>
                 {MASCOT_KINDS.map((k) => (
-                  <label key={k.key} className={`flex cursor-pointer flex-col items-center rounded-lg border p-2 text-center text-[11px] ${mascotKind === k.key ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:bg-slate-50"}`} title={k.label}>
+                  <label key={k.key} className={`flex cursor-pointer flex-col items-center rounded-lg border p-1.5 text-center text-[11px] ${mascotKind === k.key ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:bg-slate-50"}`} title={k.label}>
                     <input type="radio" name="mascotKind" value={k.key} checked={mascotKind === k.key} onChange={() => setMascotKind(k.key)} className="sr-only" />
-                    <span className="text-2xl">{k.emoji}</span>
-                    <span className="mt-1 leading-tight">{k.label}</span>
+                    <DancingMascot kind={k.key} still snow={false} size={56} faceSrc={removeMascot ? null : mascotPreview} faceZoom={mascotZoom} faceOffsetX={mascotOffsetX} faceOffsetY={mascotOffset} faceRotate={mascotRotate} faceFlip={mascotFlip} />
+                    <span className="mt-1 leading-tight">
+                      {k.emoji} {k.label}
+                    </span>
                   </label>
                 ))}
               </div>
+              <p className="mt-1 text-[11px] text-slate-500">Each miniature wears the uploaded face so you can compare characters before saving.</p>
             </fieldset>
             <div>
               <label htmlFor="mascot" className="label">

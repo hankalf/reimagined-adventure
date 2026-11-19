@@ -170,3 +170,26 @@ html.a11y-contrast .text-slate-500,
 html.a11y-contrast .text-slate-600 {
   color: #1e293b !important;
 }
+
+/* Still mascots (pickers, print): no dancing */
+.elf-still .elf-body,
+.elf-still .elf-head,
+.elf-still .elf-arm-l,
+.elf-still .elf-arm-r,
+.elf-still .elf-leg-l,
+.elf-still .elf-leg-r,
+.elf-still .elf-bell {
+  animation: none !important;
+}
+@media print {
+  .elf-body,
+  .elf-head,
+  .elf-arm-l,
+  .elf-arm-r,
+  .elf-leg-l,
+  .elf-leg-r,
+  .elf-bell,
+  .elf-snow {
+    animation: none !important;
+  }
+}

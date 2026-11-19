@@ -22,6 +22,8 @@ type Props = MascotFace & {
   size?: number;
   tapHint?: string;
   snow?: boolean;
+  /** Render without animation or tap handling (pickers, print). */
+  still?: boolean;
   className?: string;
 };
 
@@ -33,7 +35,7 @@ const R = 40; // face radius; face centre is (100,118)
  * The head is a circular clip over an uploaded photo, so any face can be the mascot. Tapping makes it dance
  * faster; people who prefer reduced motion get a still character.
  */
-export function DancingMascot({ kind, faceSrc, faceZoom = 100, faceOffsetX = 0, faceOffsetY = 0, faceRotate = 0, faceFlip = false, caption, size = 220, tapHint, snow = true, className }: Props) {
+export function DancingMascot({ kind, faceSrc, faceZoom = 100, faceOffsetX = 0, faceOffsetY = 0, faceRotate = 0, faceFlip = false, caption, size = 220, tapHint, snow = true, still = false, className }: Props) {
   const [fast, setFast] = useState(false);
   const id = useId().replace(/:/g, "");
   const clipId = `mascot-face-${id}`;
@@ -62,8 +64,8 @@ export function DancingMascot({ kind, faceSrc, faceZoom = 100, faceOffsetX = 0, 
   );
 
   return (
-    <div data-elf data-mascot={k} data-fast={fast ? "1" : "0"} className={`elf-stage relative inline-flex select-none flex-col items-center ${className ?? ""}`} style={{ width: size }}>
-      {snow && (
+    <div data-elf data-mascot={k} data-fast={fast ? "1" : "0"} data-still={still ? "1" : "0"} className={`elf-stage relative inline-flex select-none flex-col items-center ${still ? "elf-still" : ""} ${className ?? ""}`} style={{ width: size }}>
+      {snow && !still && (
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
             <span key={i} className="elf-snow" style={{ left: `${8 + i * 12}%`, animationDelay: `${(i * 0.7) % 4}s`, animationDuration: `${4 + (i % 3)}s`, fontSize: `${10 + (i % 3) * 4}px` }}>
@@ -72,15 +74,8 @@ export function DancingMascot({ kind, faceSrc, faceZoom = 100, faceOffsetX = 0, 
           ))}
         </div>
       )}
-      <button
-        type="button"
-        onClick={() => setFast((f) => !f)}
-        className="relative cursor-pointer rounded-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
-        aria-label={tapHint ?? "Tap to dance faster"}
-        title={tapHint ?? "Tap to dance faster"}
-        style={{ width: size, height: size * 1.5 }}
-      >
-        <svg viewBox="0 0 200 300" width={size} height={size * 1.5} role="img" aria-label={`Dancing ${k}`}>
+      {still ? (
+        <svg viewBox="0 0 200 300" width={size} height={size * 1.5} role="img" aria-label={`${k} mascot`}>
           <defs>
             <clipPath id={clipId}>
               <circle cx="100" cy="118" r={R} />
@@ -88,7 +83,25 @@ export function DancingMascot({ kind, faceSrc, faceZoom = 100, faceOffsetX = 0, 
           </defs>
           <g className="elf-body">{renderBody(k, face)}</g>
         </svg>
-      </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setFast((f) => !f)}
+          className="relative cursor-pointer rounded-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300"
+          aria-label={tapHint ?? "Tap to dance faster"}
+          title={tapHint ?? "Tap to dance faster"}
+          style={{ width: size, height: size * 1.5 }}
+        >
+          <svg viewBox="0 0 200 300" width={size} height={size * 1.5} role="img" aria-label={`Dancing ${k}`}>
+            <defs>
+              <clipPath id={clipId}>
+                <circle cx="100" cy="118" r={R} />
+              </clipPath>
+            </defs>
+            <g className="elf-body">{renderBody(k, face)}</g>
+          </svg>
+        </button>
+      )}
       {caption && <p className="mt-1 max-w-[260px] text-center text-sm font-semibold text-slate-800">{caption}</p>}
     </div>
   );

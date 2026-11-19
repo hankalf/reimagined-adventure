@@ -179,8 +179,10 @@ try {
   await a.click('button:has-text("Save branding")');
   await a.waitForSelector("text=Branding saved.");
   await a.reload();
-  const faceHref = await a.locator("[data-elf] image").first().getAttribute("href");
+  const faceHref = await a.locator("[data-elf]:not([data-still='1']) image").first().getAttribute("href");
   assert(faceHref && faceHref.includes("/api/images/"), `branding preview shows the uploaded face (${faceHref})`);
+  assert((await a.locator("[data-mascot-picker] [data-elf]").count()) === 8, "picker shows a miniature of every character");
+  assert((await a.locator("[data-mascot-picker] [data-elf] image").count()) === 8, "every miniature wears the uploaded face");
   ok("elf enabled with an uploaded face and bilingual caption");
   await shot(a, "branding-elf");
 
@@ -224,6 +226,7 @@ try {
   ok("campaign is open; QR PNG and SVG endpoints work");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/poster`);
   await a.waitForSelector("text=Escanea para elegir tu regalo");
+  assert((await a.locator("[data-elf][data-mascot='banana']").count()) === 1, "poster shows the chosen mascot");
   await shot(a, "poster");
 
   section("Employee flow in Spanish: identity check with employee number + last name");

@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { appUrl } from "@/lib/utils";
 import { PrintButton } from "./print-button";
+import { DancingMascot } from "@/components/dancing-mascot";
 
 export default async function PosterPage({ params }: PageProps<"/admin/campaigns/[id]/poster">) {
   await requireAdmin();
@@ -31,8 +32,24 @@ export default async function PosterPage({ params }: PageProps<"/admin/campaigns
         {campaign.welcomeHeadlineEs && <p className="mt-2 text-2xl font-semibold text-slate-600">{campaign.welcomeHeadlineEs}</p>}
       </header>
       <section className="my-8">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/campaigns/${campaign.slug}/qr?size=1024`} alt="QR code" className="mx-auto h-[380px] w-[380px]" />
+        <div className="flex items-center justify-center gap-6">
+          {campaign.mascotEnabled && (
+            <DancingMascot
+              kind={campaign.mascotKind}
+              still
+              snow={false}
+              size={150}
+              faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
+              faceZoom={campaign.mascotFaceZoom}
+              faceOffsetX={campaign.mascotFaceOffsetX}
+              faceOffsetY={campaign.mascotFaceOffsetY}
+              faceRotate={campaign.mascotFaceRotate}
+              faceFlip={campaign.mascotFaceFlip}
+            />
+          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/campaigns/${campaign.slug}/qr?size=1024`} alt="QR code" className="h-[380px] w-[380px]" />
+        </div>
         <p className="mt-4 text-3xl font-bold">Scan to choose your gift</p>
         <p className="text-2xl font-semibold text-slate-600">Escanea para elegir tu regalo</p>
       </section>

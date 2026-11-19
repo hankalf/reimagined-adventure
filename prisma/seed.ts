@@ -24,7 +24,7 @@ async function main() {
   const adminEmail = (process.env.ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD ?? "ChangeMe-12345";
   if ((await db.adminUser.count()) === 0) {
-    await db.adminUser.create({ data: { email: adminEmail, name: "Administrator", role: "ADMIN", passwordHash: await bcrypt.hash(adminPassword, 12) } });
+    await db.adminUser.create({ data: { email: adminEmail, username: adminEmail, name: "Administrator", role: "ADMIN", passwordHash: await bcrypt.hash(adminPassword, 12) } });
     console.log(`Created admin ${adminEmail}`);
   }
 

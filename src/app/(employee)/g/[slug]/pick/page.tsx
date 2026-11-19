@@ -14,18 +14,23 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
   const t = dict(lang);
   const session = await getEmployeeSession(campaign.id);
   if (!session) redirect(`/g/${slug}`);
-  if (!campaignAcceptsPicks(campaign).ok) redirect(`/g/${slug}`);
+  if (!session.preview && !campaignAcceptsPicks(campaign).ok) redirect(`/g/${slug}`);
 
   const ctx = await getPickContext(campaign.id, session.employeeId);
   const wantsChange = sp.change === "1";
-  if (ctx.selection) {
+  if (ctx.selection && !session.preview) {
     const changeable = canChangeSelection(ctx.selection.status, campaign.allowChangeUntilOrdered);
     if (!changeable || (!wantsChange && ctx.selection.status !== "NEEDS_REPICK")) redirect(`/g/${slug}/done`);
   }
 
-  const repick = ctx.selection?.status === "NEEDS_REPICK";
+  const repick = ctx.selection?.status === "NEEDS_REPICK" && !session.preview;
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
+      {session.preview && (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-preview-banner>
+          {fill(t.landing.previewBanner, { name: `${ctx.employee.firstName} ${ctx.employee.lastName}` })}
+        </div>
+      )}
       {repick && ctx.selection && (
         <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5">
           <h2 className="font-semibold text-amber-900">{t.done.repickTitle}</h2>

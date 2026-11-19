@@ -28,8 +28,15 @@ export default async function BrandingPage({ params }: PageProps<"/admin/campaig
         mascotCaption: c.mascotCaption ?? "",
         mascotCaptionEs: c.mascotCaptionEs ?? "",
         mascotShowOnDone: c.mascotShowOnDone,
+        mascotKind: c.mascotKind,
         mascotFaceZoom: c.mascotFaceZoom,
+        mascotFaceOffsetX: c.mascotFaceOffsetX,
         mascotFaceOffsetY: c.mascotFaceOffsetY,
+        mascotFaceRotate: c.mascotFaceRotate,
+        mascotFaceFlip: c.mascotFaceFlip,
+        videoUrl: c.videoUrl ?? "",
+        showPickCount: c.showPickCount,
+        notifyEmployeesOnReceived: c.notifyEmployeesOnReceived,
       }}
     />
   );

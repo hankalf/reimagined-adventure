@@ -7,11 +7,14 @@ import { dec, money } from "@/lib/utils";
 import { optionGroups } from "@/lib/options";
 import { ImportItemsForm } from "./import-form";
 import { ItemThumb } from "@/components/item-thumb";
+import { bulkItemsAction } from "./actions";
+import { BulkBar } from "./bulk-bar";
 
 export default async function ItemsPage({ searchParams }: PageProps<"/admin/items">) {
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const type = sp.type === "PRODUCT" || sp.type === "CUSTOM" ? sp.type : undefined;
+  const campaigns = await db.campaign.findMany({ where: { status: { not: "CLOSED" } }, select: { id: true, name: true, status: true }, orderBy: { createdAt: "desc" } });
   const items = await db.item.findMany({
     where: {
       ...(type ? { type } : {}),
@@ -80,10 +83,14 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
           }
         />
       ) : (
-        <div className="card overflow-x-auto">
+        <form action={bulkItemsAction} className="card overflow-x-auto">
+          <BulkBar campaigns={campaigns} categories={[...new Set(items.map((i) => i.category).filter((c): c is string => Boolean(c)))].sort()} />
           <table className="table">
             <thead>
               <tr>
+                <th className="w-8">
+                  <span className="sr-only">Select</span>
+                </th>
                 <th>Gift</th>
                 <th>Type</th>
                 <th>Category</th>
@@ -99,6 +106,9 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
                 const src = imageSrc(item, true);
                 return (
                   <tr key={item.id} className="hover:bg-slate-50">
+                    <td>
+                      <input type="checkbox" name="ids" value={item.id} className="h-4 w-4" aria-label={`Select ${item.name}`} />
+                    </td>
                     <td>
                       <Link href={`/admin/items/${item.id}`} className="flex items-center gap-3">
                         <div className="w-14 shrink-0">
@@ -124,7 +134,7 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
               })}
             </tbody>
           </table>
-        </div>
+        </form>
       )}
     </div>
   );

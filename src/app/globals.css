@@ -153,3 +153,20 @@ body {
   10% { opacity: 0.9; }
   100% { transform: translateY(340px) rotate(360deg); opacity: 0; }
 }
+
+/* ---- Accessibility toggles (employee pages and kiosk) ---- */
+html.a11y-large {
+  font-size: 118%;
+}
+html.a11y-contrast body {
+  filter: contrast(1.15);
+}
+html.a11y-contrast a,
+html.a11y-contrast button {
+  text-decoration-thickness: 2px;
+}
+html.a11y-contrast .text-slate-400,
+html.a11y-contrast .text-slate-500,
+html.a11y-contrast .text-slate-600 {
+  color: #1e293b !important;
+}

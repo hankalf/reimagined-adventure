@@ -14,7 +14,7 @@ export function ImportForm({ campaignId, campaignAllEligible }: { campaignId?: s
         </label>
         <input id="file" name="file" type="file" accept=".csv,text/csv,text/plain" className="input" required />
         <p className="mt-1 text-xs text-slate-500">
-          Columns: <code>employee_number, first_name, last_name, department{campaignId ? ", budget" : ""}</code>. A single <code>name</code> column also works. Headers are matched loosely.
+          Columns: <code>employee_number, first_name, last_name, department, email{campaignId ? ", budget" : ""}</code>. A single <code>name</code> column also works. Headers are matched loosely.
           {campaignId && " The optional budget column sets a per-employee gift budget for this campaign."}
         </p>
       </div>

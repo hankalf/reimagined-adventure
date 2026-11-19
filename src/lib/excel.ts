@@ -267,3 +267,42 @@ export async function buildAllOrdersWorkbook(reports: ReportData[]): Promise<Buf
   const out = await wb.xlsx.writeBuffer();
   return Buffer.from(out as ArrayBuffer);
 }
+
+function sheetName(raw: string, used: Set<string>): string {
+  const name = raw.replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 28) || "Other";
+  let candidate = name;
+  let n = 2;
+  while (used.has(candidate.toLowerCase())) candidate = `${name.slice(0, 25)} ${n++}`;
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
+/** Reminder workbook: employees who haven't picked, one sheet per department plus an "All" sheet. */
+export async function buildNotPickedByDepartmentWorkbook(data: ReportData): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Employee Gift Portal";
+  const columns = [
+    { header: "Employee number", key: "num", width: 16 },
+    { header: "First name", key: "first", width: 16 },
+    { header: "Last name", key: "last", width: 18 },
+    { header: "Department", key: "dept", width: 18 },
+  ];
+  const all = wb.addWorksheet("All");
+  all.columns = columns;
+  for (const r of data.notPicked) all.addRow({ num: r.employeeNumber, first: r.firstName, last: r.lastName, dept: r.department ?? "" });
+  styleHeader(all);
+  const used = new Set<string>(["all"]);
+  const byDept = new Map<string, typeof data.notPicked>();
+  for (const r of data.notPicked) {
+    const key = r.department?.trim() || "No department";
+    byDept.set(key, [...(byDept.get(key) ?? []), r]);
+  }
+  for (const [dept, rows] of [...byDept.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const ws = wb.addWorksheet(sheetName(dept, used));
+    ws.columns = columns;
+    for (const r of rows) ws.addRow({ num: r.employeeNumber, first: r.firstName, last: r.lastName, dept: r.department ?? "" });
+    styleHeader(ws);
+  }
+  const out = await wb.xlsx.writeBuffer();
+  return Buffer.from(out as ArrayBuffer);
+}

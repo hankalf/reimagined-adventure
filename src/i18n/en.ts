@@ -19,10 +19,20 @@ export const en = {
     daysLeft: "{n} days left to choose",
     lastDay: "Last day to choose!",
     aMessageFrom: "A message from {name}",
+    pickCount: "{n} of your colleagues have already chosen their gift",
+    previewBanner: "Preview mode: you are seeing this as {name}. Choices are not saved.",
+    watchVideo: "A message for you",
   },
 
   mascot: {
     tap: "Tap the elf to make it dance faster!",
+  },
+
+  a11y: {
+    largerText: "Larger text",
+    normalText: "Normal text",
+    highContrast: "High contrast",
+    normalContrast: "Normal colors",
   },
 
   pick: {
@@ -37,6 +47,13 @@ export const en = {
     overBudget: "Over your budget",
     perk: "Perk",
     noResults: "No gifts match your search.",
+    surpriseMe: "Surprise me",
+    shortlist: "Shortlist",
+    shortlistAdd: "Add to shortlist",
+    shortlistRemove: "Remove from shortlist",
+    shortlistOnly: "Show my shortlist ({n})",
+    shortlistAll: "Show all gifts",
+    shortlistEmpty: "Tap the heart on gifts you like to compare them here.",
     viewDetails: "View details",
     selectThis: "Choose this gift",
     chooseOption: "Choose {label}",
@@ -82,6 +99,7 @@ export const en = {
     itemUnavailable: "Sorry, that gift is no longer available. Please choose another.",
     overBudget: "That gift is over your budget. Please choose another.",
     notEligible: "You're not eligible for this gift program. Please contact HR.",
+    preview: "This is a preview. Choices are not saved in preview mode.",
     generic: "Something went wrong. Please try again.",
   },
 } as const;

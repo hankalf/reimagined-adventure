@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { AdminNav } from "@/components/admin/nav";
 
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminAppLayout({ children }: { children: React.ReactNode }) {
   const admin = await requireAdmin();
+  if (admin.mustChangePassword) redirect("/admin/change-password");
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="border-b border-slate-200 bg-white">
@@ -18,6 +20,9 @@ export default async function AdminAppLayout({ children }: { children: React.Rea
             <span className="hidden text-slate-600 sm:inline">
               {admin.name} <span className="text-slate-400">({admin.role})</span>
             </span>
+            <Link href="/admin/change-password" className="btn-ghost btn-sm">
+              Change password
+            </Link>
             <a href="/admin/logout" className="btn-secondary btn-sm">
               Sign out
             </a>

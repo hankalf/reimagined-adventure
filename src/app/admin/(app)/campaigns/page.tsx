@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/ui";
 import { EmptyState, PageHeader } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/utils";
+import { duplicateCampaignAction } from "./actions";
 
 export default async function CampaignsPage() {
   const campaigns = await db.campaign.findMany({
@@ -13,7 +14,7 @@ export default async function CampaignsPage() {
     <div>
       <PageHeader
         title="Campaigns"
-        description="A campaign is one gift program (e.g. Holiday 2026) with its own gifts, employees, QR code and branding."
+        description="A campaign is one gift program (e.g. Holiday 2026) with its own gifts, employees, QR code and branding. Duplicate last year's to start the next one in one click."
         actions={
           <Link href="/admin/campaigns/new" className="btn-primary">
             + New campaign
@@ -41,6 +42,7 @@ export default async function CampaignsPage() {
                 <th>Selections</th>
                 <th>Closes</th>
                 <th>Created</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -59,6 +61,14 @@ export default async function CampaignsPage() {
                   <td>{c._count.selections}</td>
                   <td>{fmtDate(c.closesAt)}</td>
                   <td>{fmtDate(c.createdAt)}</td>
+                  <td>
+                    <form action={duplicateCampaignAction} className="flex justify-end">
+                      <input type="hidden" name="id" value={c.id} />
+                      <button className="btn-ghost btn-sm" title="Copy gifts, employees, branding and text into a new draft">
+                        ⧉ Duplicate
+                      </button>
+                    </form>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -49,12 +49,15 @@ enum ActorType {
 }
 
 model AdminUser {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  name            String
-  passwordHash    String?
-  role            AdminRole @default(ADMIN)
-  active          Boolean   @default(true)
+  id                 String    @id @default(cuid())
+  /// Login name (case-insensitive). Email is optional and only used for password-reset links.
+  username           String    @unique
+  email              String?   @unique
+  name               String
+  passwordHash       String?
+  role               AdminRole @default(ADMIN)
+  active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
   inviteToken     String?   @unique
   inviteExpiresAt DateTime?
   lastLoginAt     DateTime?
@@ -68,6 +71,8 @@ model Employee {
   firstName      String
   lastName       String
   department     String?
+  /// Optional; used only for "your gift is ready" notifications when SMTP is configured.
+  email          String?
   active         Boolean            @default(true)
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
@@ -114,14 +119,24 @@ model Campaign {
   showBudgetToEmployees Boolean  @default(false)
   currency              String   @default("USD")
 
+  /// Landing page extras
+  videoUrl                  String?
+  showPickCount             Boolean @default(true)
+  notifyEmployeesOnReceived Boolean @default(false)
+
   // Holiday mascot (dancing elf with an uploaded face)
   mascotEnabled     Boolean @default(false)
+  /// elf | santa | snowman | reindeer | gingerbread | banana | pineapple | strawberry
+  mascotKind        String  @default("elf")
   mascotImageId     String?
   mascotCaption     String?
   mascotCaptionEs   String?
   mascotShowOnDone  Boolean @default(true)
   mascotFaceZoom    Int     @default(100)
+  mascotFaceOffsetX Int     @default(0)
   mascotFaceOffsetY Int     @default(0)
+  mascotFaceRotate  Int     @default(0)
+  mascotFaceFlip    Boolean @default(false)
 
   // Integrations
   feedToken     String    @unique @default(cuid())

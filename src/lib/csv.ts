@@ -5,6 +5,7 @@ export type EmployeeCsvRow = {
   firstName: string;
   lastName: string;
   department: string | null;
+  email: string | null;
   budget: number | null;
 };
 
@@ -15,6 +16,7 @@ export type EmployeeCsvResult = {
 };
 
 const HEADER_ALIASES: Record<keyof EmployeeCsvRow | "fullName", string[]> = {
+  email: ["email", "e-mail", "email address", "work email", "correo"],
   employeeNumber: ["employee_number", "employeenumber", "employee number", "employee no", "employee #", "emp no", "emp #", "emp number", "empno", "employee id", "employee_id", "employeeid", "emp id", "id", "number", "badge", "badge number", "clock number", "clock no"],
   firstName: ["first_name", "firstname", "first name", "first", "given name", "given_name", "nombre"],
   lastName: ["last_name", "lastname", "last name", "last", "surname", "family name", "family_name", "apellido"],
@@ -56,6 +58,7 @@ export function parseEmployeeCsv(text: string): EmployeeCsvResult {
   const colLast = findColumn(headers, HEADER_ALIASES.lastName);
   const colFull = findColumn(headers, HEADER_ALIASES.fullName);
   const colDept = findColumn(headers, HEADER_ALIASES.department);
+  const colEmail = findColumn(headers, HEADER_ALIASES.email);
   const colBudget = findColumn(headers, HEADER_ALIASES.budget);
 
   if (colNumber === -1) {
@@ -107,11 +110,13 @@ export function parseEmployeeCsv(text: string): EmployeeCsvResult {
     seen.add(employeeNumber);
     const budgetRaw = cell(colBudget).replace(/[^0-9.]/g, "");
     const budget = budgetRaw ? Number(budgetRaw) : null;
+    const emailRaw = cell(colEmail).toLowerCase();
     rows.push({
       employeeNumber,
       firstName,
       lastName,
       department: cell(colDept) || null,
+      email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw) ? emailRaw : null,
       budget: budget !== null && Number.isFinite(budget) ? budget : null,
     });
   }

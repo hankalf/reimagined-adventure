@@ -3,10 +3,10 @@
 import { useActionState } from "react";
 import { saveEmployeeAction, type EmployeeFormState } from "./actions";
 
-export function EmployeeForm({ initial }: { initial?: { id: string; employeeNumber: string; firstName: string; lastName: string; department: string | null; active: boolean } }) {
+export function EmployeeForm({ initial }: { initial?: { id: string; employeeNumber: string; firstName: string; lastName: string; department: string | null; email: string | null; active: boolean } }) {
   const [state, action, pending] = useActionState<EmployeeFormState, FormData>(saveEmployeeAction, null);
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-5 sm:items-end">
+    <form action={action} className="grid gap-3 sm:grid-cols-6 sm:items-end">
       {initial && <input type="hidden" name="id" value={initial.id} />}
       <div>
         <label className="label" htmlFor={`num-${initial?.id ?? "new"}`}>
@@ -26,6 +26,10 @@ export function EmployeeForm({ initial }: { initial?: { id: string; employeeNumb
         <label className="label">Department</label>
         <input name="department" defaultValue={initial?.department ?? ""} className="input" />
       </div>
+      <div>
+        <label className="label">Email (optional)</label>
+        <input name="email" type="email" defaultValue={initial?.email ?? ""} className="input" />
+      </div>
       <div className="flex items-center gap-3">
         {initial && (
           <label className="flex items-center gap-1 text-sm">
@@ -36,8 +40,8 @@ export function EmployeeForm({ initial }: { initial?: { id: string; employeeNumb
           {pending ? "Saving…" : initial ? "Save" : "Add"}
         </button>
       </div>
-      {state?.error && <p className="text-sm text-red-700 sm:col-span-5">{state.error}</p>}
-      {state?.success && <p className="text-sm text-emerald-700 sm:col-span-5">{state.success}</p>}
+      {state?.error && <p className="text-sm text-red-700 sm:col-span-6">{state.error}</p>}
+      {state?.success && <p className="text-sm text-emerald-700 sm:col-span-6">{state.success}</p>}
     </form>
   );
 }

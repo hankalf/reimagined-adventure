@@ -81,6 +81,9 @@ export default async function CampaignEmployeesPage({ params, searchParams }: Pa
             <a href={`/api/export/${id}?type=notpicked`} className="btn-secondary btn-sm">
               ⬇ Not picked yet (CSV)
             </a>
+            <a href={`/api/export/${id}?type=notpicked-xlsx`} className="btn-primary btn-sm">
+              ⬇ Reminders by department (Excel, one sheet per department)
+            </a>
             <a href={`/api/export/${id}?type=detail`} className="btn-secondary btn-sm">
               ⬇ All selections (CSV)
             </a>
@@ -88,7 +91,7 @@ export default async function CampaignEmployeesPage({ params, searchParams }: Pa
               ⬇ Excel workbook
             </a>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Use the “not picked” list to send reminders through your usual channels.</p>
+          <p className="mt-2 text-xs text-slate-500">Send each department&apos;s sheet to its manager so they can nudge their own people.</p>
         </section>
       </div>
 

@@ -14,6 +14,8 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - Budget-aware: items above the employee's budget are greyed out (or hidden). Stock limits show "Only N left" / "Sold out".
 - If HR marks their gift out of stock, the employee is asked to re-pick on their next visit.
 - English/Spanish toggle, defaulting to the browser language; campaign and item text can be entered in both languages.
+- Category tabs with "All gifts" (grouped by category) as the default, "Surprise me", a heart shortlist to compare favourites, a larger-text / high-contrast toggle, a "N colleagues have already chosen" nudge, an optional thank-you video embed, and a dancing holiday mascot (elf, Santa, snowman, reindeer, gingerbread, or dancing banana / pineapple / strawberry) wearing an uploaded face with zoom, position, tilt and mirror controls.
+- Employees never see prices or store links.
 
 **Admins / HR**
 - Gift catalog: paste an Amazon link and the form fills itself in when the page can be read (name, price, description, category, every product photo, colour/size options; Amazon sometimes blocks this), upload a main photo plus a gallery of extra photos (resized + thumbnails generated automatically), a photo per colour that swaps in when the employee picks that colour, up to two option groups (e.g. Color and Size), cost, category. Custom non-purchase gifts with a "how HR fulfils this" note. Bulk import from an Excel/CSV spreadsheet with a downloadable template (see below).
@@ -26,8 +28,14 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - Order-time pricing: type the price actually paid on the Orders row before marking it ordered; the gift is re-priced everywhere and every change is kept in the gift's price history.
 - QR poster: printable bilingual A4 page; PNG/SVG download.
 - Branding per campaign: logo, hero image, primary/accent colours, bilingual headline, welcome, pickup instructions and leadership message.
-- Admin users: ADMIN and HR roles, invite by email with a self-service set-password link (also shown to copy), deactivate/delete, forgot-password flow.
-- Audit log of admin and employee actions (database table `AuditLog`).
+- Admin users: ADMIN and HR roles. Add a user with name, username and role; a temporary password is generated and shown once, and they must choose their own password at first sign-in. Reset password, deactivate, delete. Optional email for reset links.
+- Launch checklist on each campaign (blocking items must pass before "Open campaign"), and "Preview as employee" to walk through the employee pages for any eligible person without saving anything.
+- Catalog bulk actions (activate, deactivate, set category, add to campaign), duplicate a gift, duplicate a campaign.
+- Dashboard "Needs attention" panel: re-picks outstanding, gifts without a photo or price, campaigns open for a week with people who haven't picked, campaigns about to close, webhook failures.
+- Reminders by department: Excel workbook with one sheet per department of people who haven't picked.
+- Receiving mode: paste ASINs, SKUs, employee numbers or confirmation codes from packing slips to mark ordered picks received in bulk.
+- Audit log viewer (Settings → Audit log) with search and filters.
+- Optional "your gift is ready" email to employees when a pick is marked received (needs an email column in the employee list and SMTP configured).
 
 ## Deploy on Railway
 
@@ -61,7 +69,7 @@ npm run dev
 ```
 
 - Employee demo: http://localhost:3000/g/holiday-2026 (try employee `10001`, last name `García`).
-- Admin: http://localhost:3000/admin
+- Admin: http://localhost:3000/admin (sign in with `ADMIN_EMAIL` as the username).
 - Tests: `npm test` (unit) and, with the server running, `node tests/e2e/portal.e2e.mjs` (Playwright walkthrough).
 
 ## How the pieces fit

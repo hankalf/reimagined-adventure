@@ -10,6 +10,9 @@ import { processImage } from "@/lib/images";
 import { resetSelection, setCampaignItemOptions, setCampaignItemStock, submitSelection, updateSelectionStatuses } from "@/lib/selection";
 import { optionGroups } from "@/lib/options";
 import { applyOrderPrice } from "@/lib/pricing";
+import { launchStatus } from "@/lib/launch";
+import { isMascotKind } from "@/lib/mascot";
+import { employeeNumberCandidates } from "@/lib/selection-rules";
 import { isHexColor, slugify } from "@/lib/utils";
 import { randomBytes } from "node:crypto";
 
@@ -124,9 +127,91 @@ export async function setCampaignStatusAction(formData: FormData): Promise<void>
   const id = s(formData, "id");
   const status = s(formData, "status");
   if (!["DRAFT", "OPEN", "CLOSED"].includes(status)) return;
+  if (status === "OPEN") {
+    const launch = await launchStatus(id);
+    if (!launch.canOpen) {
+      redirect(`/admin/campaigns/${id}?error=${encodeURIComponent(`Not ready to open: ${launch.blockers.map((b) => b.label.toLowerCase()).join("; ")}.`)}`);
+    }
+  }
   await db.campaign.update({ where: { id }, data: { status: status as "DRAFT" | "OPEN" | "CLOSED" } });
   await audit({ actorType: "ADMIN", actorId: admin.id, action: `campaign.${status.toLowerCase()}`, entityType: "Campaign", entityId: id });
   revalidateCampaign(id);
+}
+
+/** Copy a campaign (gifts, offered options, eligibility list, branding and text) as a new draft. */
+export async function duplicateCampaignAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const sourceId = s(formData, "id");
+  const source = await db.campaign.findUnique({ where: { id: sourceId }, include: { items: true, employees: true } });
+  if (!source) return;
+  let slug = slugify(`${source.slug}-copy`);
+  if (await db.campaign.findUnique({ where: { slug } })) slug = `${slug}-${randomBytes(2).toString("hex")}`;
+  const { id: _id, createdAt: _c, updatedAt: _u, feedToken: _f, items, employees, ...rest } = source;
+  void _id; void _c; void _u; void _f;
+  const copy = await db.campaign.create({
+    data: {
+      ...rest,
+      name: `Copy of ${source.name}`,
+      slug,
+      status: "DRAFT",
+      opensAt: null,
+      closesAt: null,
+      lastHrEmailAt: null,
+      items: { create: items.map((ci) => ({ itemId: ci.itemId, sortOrder: ci.sortOrder, stockLimit: ci.stockLimit, unitCostOverride: ci.unitCostOverride, enabledOption1Values: ci.enabledOption1Values, enabledOption2Values: ci.enabledOption2Values })) },
+      employees: { create: employees.map((e) => ({ employeeId: e.employeeId, budgetOverride: e.budgetOverride })) },
+    },
+  });
+  await audit({ actorType: "ADMIN", actorId: admin.id, action: "campaign.duplicated", entityType: "Campaign", entityId: copy.id, meta: { from: source.id } });
+  revalidatePath("/admin/campaigns");
+  redirect(`/admin/campaigns/${copy.id}/settings`);
+}
+
+export type ReceiveState = { matched: Array<{ label: string; count: number }>; unmatched: string[]; total: number; error?: string } | null;
+
+/**
+ * Receiving mode: paste confirmation codes, employee numbers, ASINs or SKUs (one per line or comma separated);
+ * every matching ordered selection is marked received.
+ */
+export async function receiveAction(_prev: ReceiveState, formData: FormData): Promise<ReceiveState> {
+  const admin = await requireAdmin();
+  const campaignId = s(formData, "campaignId");
+  const raw = s(formData, "tokens");
+  const tokens = [...new Set(raw.split(/[\n,;\t]+/).map((t) => t.trim()).filter(Boolean))].slice(0, 500);
+  if (tokens.length === 0) return { matched: [], unmatched: [], total: 0, error: "Paste at least one code, employee number, ASIN or SKU." };
+  const ordered = await db.selection.findMany({ where: { campaignId, status: "ORDERED" }, include: { employee: true, item: true } });
+  const matched: Array<{ label: string; count: number }> = [];
+  const unmatched: string[] = [];
+  const ids = new Set<string>();
+  for (const token of tokens) {
+    const upper = token.toUpperCase();
+    const numbers = employeeNumberCandidates(token);
+    const hits = ordered.filter(
+      (sel) =>
+        sel.confirmationCode === upper ||
+        numbers.includes(sel.employee.employeeNumber) ||
+        (sel.item.asin && sel.item.asin.toUpperCase() === upper) ||
+        (sel.item.sku && sel.item.sku.toUpperCase() === upper),
+    );
+    if (hits.length === 0) {
+      unmatched.push(token);
+      continue;
+    }
+    hits.forEach((h) => ids.add(h.id));
+    matched.push({ label: token, count: hits.length });
+  }
+  const total = await updateSelectionStatuses({ ids: [...ids], status: "RECEIVED", adminId: admin.id });
+  await audit({ actorType: "ADMIN", actorId: admin.id, action: "receiving.batch", entityType: "Campaign", entityId: campaignId, meta: { tokens: tokens.length, matched: matched.length, received: total } });
+  revalidateCampaign(campaignId);
+  return { matched, unmatched, total };
+}
+
+export async function receiveAllOrderedAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const campaignId = s(formData, "campaignId");
+  const rows = await db.selection.findMany({ where: { campaignId, status: "ORDERED" }, select: { id: true } });
+  await updateSelectionStatuses({ ids: rows.map((r) => r.id), status: "RECEIVED", adminId: admin.id });
+  revalidateCampaign(campaignId);
+  redirect(`/admin/campaigns/${campaignId}/receiving?saved=${rows.length}`);
 }
 
 export async function deleteCampaignAction(formData: FormData): Promise<void> {
@@ -191,12 +276,19 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
       leadershipMessage: s(formData, "leadershipMessage") || null,
       leadershipMessageEs: s(formData, "leadershipMessageEs") || null,
       leadershipName: s(formData, "leadershipName") || null,
+      videoUrl: s(formData, "videoUrl") || null,
+      showPickCount: formData.get("showPickCount") === "on",
+      notifyEmployeesOnReceived: formData.get("notifyEmployeesOnReceived") === "on",
       mascotEnabled: formData.get("mascotEnabled") === "on",
       mascotCaption: s(formData, "mascotCaption") || null,
       mascotCaptionEs: s(formData, "mascotCaptionEs") || null,
       mascotShowOnDone: formData.get("mascotShowOnDone") === "on",
+      mascotKind: isMascotKind(s(formData, "mascotKind")) ? s(formData, "mascotKind") : "elf",
       mascotFaceZoom: clampInt(s(formData, "mascotFaceZoom"), 100, 250, 100),
+      mascotFaceOffsetX: clampInt(s(formData, "mascotFaceOffsetX"), -40, 40, 0),
       mascotFaceOffsetY: clampInt(s(formData, "mascotFaceOffsetY"), -40, 40, 0),
+      mascotFaceRotate: clampInt(s(formData, "mascotFaceRotate"), -45, 45, 0),
+      mascotFaceFlip: formData.get("mascotFaceFlip") === "on",
       ...(logoImageId !== undefined ? { logoImageId } : {}),
       ...(heroImageId !== undefined ? { heroImageId } : {}),
       ...(mascotImageId !== undefined ? { mascotImageId } : {}),

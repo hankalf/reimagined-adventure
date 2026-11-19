@@ -17,10 +17,46 @@ type Props = {
   allowChange: boolean;
 };
 
+const SHORTLIST_MAX = 5;
+
 export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("");
   const [open, setOpen] = useState<PickItem | null>(null);
+  const [shortlist, setShortlist] = useState<string[]>([]);
+  const [onlyShortlist, setOnlyShortlist] = useState(false);
+  const storageKey = `gp_shortlist_${slug}`;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+        if (Array.isArray(saved)) setShortlist(saved.filter((id: unknown): id is string => typeof id === "string" && items.some((i) => i.id === id)));
+      } catch {
+        // ignore
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [storageKey, items]);
+
+  function toggleShortlist(id: string) {
+    setShortlist((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(-SHORTLIST_MAX);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      if (next.length === 0) setOnlyShortlist(false);
+      return next;
+    });
+  }
+
+  function surpriseMe() {
+    const pool = items.filter((i) => i.available && !i.overBudget);
+    if (pool.length === 0) return;
+    setOpen(pool[Math.floor(Math.random() * pool.length)]);
+  }
 
   // Categories in the order they first appear (admins control item order); uncategorised gifts go last.
   const categories = useMemo(() => {
@@ -32,12 +68,13 @@ export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: P
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((i) => {
+      if (onlyShortlist && !shortlist.includes(i.id)) return false;
       if (category && (i.category ?? "__none__") !== category) return false;
       if (!q) return true;
       const name = `${i.name} ${i.nameEs ?? ""} ${i.description} ${i.descriptionEs ?? ""} ${i.category ?? ""}`.toLowerCase();
       return name.includes(q);
     });
-  }, [items, query, category]);
+  }, [items, query, category, onlyShortlist, shortlist]);
   // "All gifts" view groups the list under category headings.
   const sections = useMemo(() => {
     if (category || categories.length === 0) return [{ key: category || "all", title: null as string | null, items: visible }];
@@ -75,7 +112,7 @@ export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: P
           </div>
         </div>
       )}
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={query}
@@ -84,6 +121,14 @@ export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: P
           className="input sm:max-w-xs"
           aria-label={t.pick.search}
         />
+        <button type="button" onClick={surpriseMe} className="btn-secondary whitespace-nowrap" data-surprise>
+          🎲 {t.pick.surpriseMe}
+        </button>
+        {shortlist.length > 0 && (
+          <button type="button" onClick={() => setOnlyShortlist((v) => !v)} className={`whitespace-nowrap ${onlyShortlist ? "btn-primary" : "btn-secondary"}`} data-shortlist-toggle aria-pressed={onlyShortlist}>
+            ♥ {onlyShortlist ? t.pick.shortlistAll : fill(t.pick.shortlistOnly, { n: shortlist.length })}
+          </button>
+        )}
       </div>
 
       {visible.length === 0 ? (
@@ -97,10 +142,23 @@ export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: P
             const src = imageSrc(item, true);
             const disabled = !item.available || item.overBudget;
             const name = localized(lang, item.name, item.nameEs);
+            const hearted = shortlist.includes(item.id);
             return (
-              <li key={item.id}>
+              <li key={item.id} className="relative">
                 <button
                   type="button"
+                  onClick={() => toggleShortlist(item.id)}
+                  aria-pressed={hearted}
+                  aria-label={hearted ? t.pick.shortlistRemove : t.pick.shortlistAdd}
+                  title={hearted ? t.pick.shortlistRemove : t.pick.shortlistAdd}
+                  data-heart
+                  className={`absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow ${hearted ? "bg-rose-500 text-white" : "bg-white/90 text-slate-500 hover:text-rose-500"}`}
+                >
+                  {hearted ? "♥" : "♡"}
+                </button>
+                <button
+                  type="button"
+                  data-card
                   onClick={() => setOpen(item)}
                   className={`group flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                     currentItemId === item.id ? "border-brand ring-2 ring-brand/30" : "border-slate-200"

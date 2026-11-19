@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { imageSrc } from "@/lib/image-src";
 import { ItemThumb } from "@/components/item-thumb";
+import { A11yToggle } from "@/components/a11y-toggle";
 import { fmtDate, SELECTION_STATUS_LABEL } from "@/lib/utils";
 import { kioskCollectAction, kioskLookupAction, kioskSelectionByIdAction, kioskUndoAction, type KioskLookup, type KioskSelection, type KioskStats } from "./actions";
 import { Scanner } from "./scanner";
@@ -155,6 +156,7 @@ export function KioskClient({ campaign, initialStats }: Props) {
             <div className="text-xl font-bold text-slate-200">{stats.toOrder + stats.ordered}</div>
             <div className="text-[10px] uppercase text-slate-400">not in yet</div>
           </div>
+          <A11yToggle dark labels={{ largerText: "Larger text", normalText: "Normal text", highContrast: "High contrast", normalContrast: "Normal colors" }} />
           <Link href={`/admin/campaigns/${campaign.id}/orders`} className="ml-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800">
             Exit
           </Link>

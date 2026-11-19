@@ -100,18 +100,33 @@ async function syncItemImages(itemId: string, formData: FormData, option1Values:
     }
   }
 
-  // Per-colour uploads / removals
+  // Extra gallery photos from pasted links (one per line)
+  const extraUrls = (str(formData, "extraImageUrls") ?? "").split(/[\n,]/).map((u) => u.trim()).filter((u) => /^https?:\/\//i.test(u)).slice(0, 12);
+  for (const url of extraUrls) {
+    const imageId = await storeImageFromUrl(url);
+    if (imageId) await db.itemImage.create({ data: { itemId, imageId, sortOrder: nextOrder++ } });
+    else warnings.push(`Could not download ${url}.`);
+  }
+
+  // Per-colour uploads / links / removals
   for (const value of option1Values) {
     const current = existing.find((r) => r.option1Value === value && !removeIds.has(r.id));
     const file = formData.get(`colorImage:${value}`);
+    const link = (str(formData, `colorImageUrl:${value}`) ?? "").trim();
+    let imageId: string | null = null;
     if (file instanceof File && file.size > 0) {
       try {
-        const imageId = await storeUploadedFile(file);
-        if (current) await deleteItemImage(current);
-        await db.itemImage.create({ data: { itemId, imageId, option1Value: value, sortOrder: nextOrder++ } });
+        imageId = await storeUploadedFile(file);
       } catch (err) {
         warnings.push(`${value}: ${err instanceof Error ? err.message : "could not process"}`);
       }
+    } else if (/^https?:\/\//i.test(link)) {
+      imageId = await storeImageFromUrl(link);
+      if (!imageId) warnings.push(`${value}: could not download ${link}.`);
+    }
+    if (imageId) {
+      if (current) await deleteItemImage(current);
+      await db.itemImage.create({ data: { itemId, imageId, option1Value: value, sortOrder: nextOrder++ } });
     } else if (formData.get(`colorImageRemove:${value}`) === "1" && current) {
       await deleteItemImage(current);
     }
@@ -407,4 +422,68 @@ export async function importItemsAction(_prev: ImportItemsState, formData: FormD
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "items.imported", entityType: "Item", entityId: "bulk", meta: { file: file.name, created, updated, skipped: parsed.skipped, imagesStored } });
   revalidatePath("/admin/items");
   return { summary: { created, updated, skipped: parsed.skipped, imagesStored, errors: errors.slice(0, 20) } };
+}
+
+
+// ---------- bulk actions on the catalog list ----------
+
+export async function bulkItemsAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  const intent = str(formData, "intent") ?? "";
+  if (ids.length === 0) redirect("/admin/items?warn=" + encodeURIComponent("Tick at least one gift first."));
+  let notice = "";
+  if (intent === "activate" || intent === "deactivate") {
+    const res = await db.item.updateMany({ where: { id: { in: ids } }, data: { active: intent === "activate" } });
+    notice = `${res.count} gift(s) ${intent === "activate" ? "activated" : "deactivated"}.`;
+  } else if (intent === "category") {
+    const category = (str(formData, "bulkCategory") ?? "").trim();
+    const res = await db.item.updateMany({ where: { id: { in: ids } }, data: { category: category || null } });
+    notice = `Category ${category ? `set to “${category}”` : "cleared"} on ${res.count} gift(s).`;
+  } else if (intent === "addToCampaign") {
+    const campaignId = str(formData, "bulkCampaignId") ?? "";
+    const campaign = campaignId ? await db.campaign.findUnique({ where: { id: campaignId } }) : null;
+    if (!campaign) redirect("/admin/items?warn=" + encodeURIComponent("Choose a campaign first."));
+    const max = await db.campaignItem.aggregate({ where: { campaignId }, _max: { sortOrder: true } });
+    let order = (max._max.sortOrder ?? -1) + 1;
+    let added = 0;
+    for (const itemId of ids) {
+      const exists = await db.campaignItem.findUnique({ where: { campaignId_itemId: { campaignId, itemId } } });
+      if (exists) continue;
+      await db.campaignItem.create({ data: { campaignId, itemId, sortOrder: order++ } });
+      added += 1;
+    }
+    revalidatePath(`/admin/campaigns/${campaignId}`, "layout");
+    notice = `${added} gift(s) added to “${campaign.name}” (${ids.length - added} already there).`;
+  } else {
+    redirect("/admin/items");
+  }
+  await audit({ actorType: "ADMIN", actorId: admin.id, action: `items.bulk.${intent}`, entityType: "Item", entityId: "bulk", meta: { ids, count: ids.length } });
+  revalidatePath("/admin/items");
+  redirect(`/admin/items?saved=${encodeURIComponent(notice)}`);
+}
+
+/** Copy a gift with its photos (image bytes are duplicated so the copies can be deleted independently). */
+export async function duplicateItemAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = str(formData, "id") ?? "";
+  const source = await db.item.findUnique({ where: { id }, include: { images: { orderBy: { sortOrder: "asc" } } } });
+  if (!source) return;
+  const copyImage = async (imageId: string | null): Promise<string | null> => {
+    if (!imageId) return null;
+    const img = await db.image.findUnique({ where: { id: imageId } });
+    if (!img) return null;
+    return (await db.image.create({ data: { mime: img.mime, data: img.data, thumb: img.thumb, width: img.width, height: img.height } })).id;
+  };
+  const { id: _id, createdAt: _c, updatedAt: _u, images, ...rest } = source;
+  void _id; void _c; void _u;
+  const created = await db.item.create({ data: { ...rest, name: `${source.name} (copy)`, imageId: await copyImage(source.imageId) } });
+  let order = 0;
+  for (const g of images) {
+    const newImageId = await copyImage(g.imageId);
+    if (newImageId) await db.itemImage.create({ data: { itemId: created.id, imageId: newImageId, option1Value: g.option1Value, sortOrder: order++ } });
+  }
+  await audit({ actorType: "ADMIN", actorId: admin.id, action: "item.duplicated", entityType: "Item", entityId: created.id, meta: { from: source.id } });
+  revalidatePath("/admin/items");
+  redirect(`/admin/items/${created.id}`);
 }

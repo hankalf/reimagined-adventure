@@ -42,11 +42,16 @@ export default async function SettingsPage() {
         title="Settings"
         description="Portal-wide defaults, the orders spreadsheet connection and environment checks."
         actions={
-          admin.role === "ADMIN" ? (
-            <Link href="/admin/settings/users" className="btn-secondary">
-              Manage admin users →
+          <>
+            <Link href="/admin/settings/audit" className="btn-secondary">
+              Audit log
             </Link>
-          ) : null
+            {admin.role === "ADMIN" ? (
+              <Link href="/admin/settings/users" className="btn-secondary">
+                Manage admin users →
+              </Link>
+            ) : null}
+          </>
         }
       />
       <div className="grid gap-6 lg:grid-cols-2">

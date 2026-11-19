@@ -4,14 +4,16 @@ import { StatusBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { setCampaignStatusAction } from "../actions";
 import { CampaignTabs } from "./tabs";
+import { launchStatus } from "@/lib/launch";
 
 export default async function CampaignLayout({ children, params }: LayoutProps<"/admin/campaigns/[id]">) {
   const { id } = await params;
   const campaign = await db.campaign.findUnique({ where: { id } });
   if (!campaign) notFound();
-  const [toOrder, needsRepick] = await Promise.all([
+  const [toOrder, needsRepick, launch] = await Promise.all([
     db.selection.count({ where: { campaignId: id, status: "SELECTED" } }),
     db.selection.count({ where: { campaignId: id, status: "NEEDS_REPICK" } }),
+    campaign.status === "OPEN" ? Promise.resolve(null) : launchStatus(id),
   ]);
   return (
     <div>
@@ -35,12 +37,21 @@ export default async function CampaignLayout({ children, params }: LayoutProps<"
           <Link href={`/admin/campaigns/${id}/kiosk`} className="btn-secondary" target="_blank">
             📷 Pickup kiosk
           </Link>
+          <a href={`/admin/campaigns/${id}/preview`} target="_blank" rel="noreferrer" className="btn-secondary">
+            👀 Preview as employee
+          </a>
           {campaign.status !== "OPEN" ? (
-            <form action={setCampaignStatusAction}>
-              <input type="hidden" name="id" value={id} />
-              <input type="hidden" name="status" value="OPEN" />
-              <button className="btn-primary">Open campaign</button>
-            </form>
+            launch && !launch.canOpen ? (
+              <Link href={`/admin/campaigns/${id}`} className="btn-primary opacity-60" title={`Not ready: ${launch.blockers.map((b) => b.label).join("; ")}`}>
+                Open campaign (see checklist)
+              </Link>
+            ) : (
+              <form action={setCampaignStatusAction}>
+                <input type="hidden" name="id" value={id} />
+                <input type="hidden" name="status" value="OPEN" />
+                <button className="btn-primary">Open campaign</button>
+              </form>
+            )
           ) : (
             <form action={setCampaignStatusAction}>
               <input type="hidden" name="id" value={id} />

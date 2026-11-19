@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { existingCategories, toFormValues } from "../helpers";
 import { ItemForm } from "../item-form";
 import { fmtDate, money } from "@/lib/utils";
+import { duplicateItemAction } from "../actions";
 
 export default async function EditItemPage({ params }: PageProps<"/admin/items/[id]">) {
   const { id } = await params;
@@ -24,9 +25,15 @@ export default async function EditItemPage({ params }: PageProps<"/admin/items/[
         title={item.name}
         description={campaigns.length > 0 ? `Shown in: ${campaigns.map((c) => c.campaign.name).join(", ")}` : "Not shown in any campaign yet."}
         actions={
-          <Link href="/admin/items" className="btn-secondary">
-            ← Back to catalog
-          </Link>
+          <>
+            <form action={duplicateItemAction}>
+              <input type="hidden" name="id" value={id} />
+              <button className="btn-secondary">⧉ Duplicate gift</button>
+            </form>
+            <Link href="/admin/items" className="btn-secondary">
+              ← Back to catalog
+            </Link>
+          </>
         }
       />
       <ItemForm initial={toFormValues(item, selectionCount)} categories={categories} />

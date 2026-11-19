@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/utils";
 import { deleteUserAction, toggleUserActiveAction } from "../actions";
-import { ResendInviteButton, UserForm } from "./user-forms";
+import { ResetPasswordButton, UserForm } from "./user-forms";
 
 export default async function UsersPage({ searchParams }: PageProps<"/admin/settings/users">) {
   const admin = await requireAdmin({ role: "ADMIN" });
@@ -15,12 +15,12 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/sett
 
   return (
     <div>
-      <PageHeader title="Admin users" description="People who can sign in to this admin. ADMIN can do everything; HR can manage campaigns, orders and emails but not users or settings." />
+      <PageHeader title="Admin users" description="People who can sign in to this admin. ADMIN can do everything; HR can manage campaigns, orders and exports but not users or settings." />
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="card p-5">
           <h2 className="font-semibold">{editing ? `Edit ${editing.name}` : "Add a user"}</h2>
-          <p className="mt-1 text-xs text-slate-500">{editing ? "Change their name, email or role." : "They receive an email with a link to choose their own password. The link is also shown here to copy."}</p>
-          <UserForm key={editing?.id ?? "new"} initial={editing ? { id: editing.id, name: editing.name, email: editing.email, role: editing.role } : undefined} />
+          <p className="mt-1 text-xs text-slate-500">{editing ? "Change their name, username, email or role." : "A temporary password is generated and shown once. They sign in with it and must choose their own password."}</p>
+          <UserForm key={editing?.id ?? "new"} initial={editing ? { id: editing.id, name: editing.name, username: editing.username, email: editing.email ?? "", role: editing.role } : undefined} />
           {editing && (
             <Link href="/admin/settings/users" className="mt-2 inline-block text-xs text-slate-500 hover:underline">
               Cancel editing
@@ -48,14 +48,17 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/sett
                       <div className="font-medium">
                         {u.name} {isSelf && <span className="text-xs text-slate-500">(you)</span>}
                       </div>
-                      <div className="text-xs text-slate-500">{u.email}</div>
+                      <div className="text-xs text-slate-500">
+                        <span className="font-mono">{u.username}</span>
+                        {u.email && ` · ${u.email}`}
+                      </div>
                     </td>
                     <td>
                       <span className={`badge ${u.role === "ADMIN" ? "bg-violet-100 text-violet-800" : "bg-slate-100 text-slate-700"}`}>{u.role}</span>
                     </td>
                     <td>
-                      {!u.passwordHash ? (
-                        <span className="badge bg-amber-100 text-amber-800">Invited · no password yet</span>
+                      {!u.passwordHash || u.mustChangePassword ? (
+                        <span className="badge bg-amber-100 text-amber-800">Temporary password</span>
                       ) : u.active ? (
                         <span className="badge bg-emerald-100 text-emerald-800">Active</span>
                       ) : (
@@ -68,7 +71,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/sett
                         <Link href={`/admin/settings/users?edit=${u.id}`} className="btn-ghost btn-sm">
                           Edit
                         </Link>
-                        <ResendInviteButton id={u.id} label={u.passwordHash ? "Send reset link" : "Resend invite"} />
+                        <ResetPasswordButton id={u.id} />
                         {!isSelf && (
                           <form action={toggleUserActiveAction}>
                             <input type="hidden" name="id" value={u.id} />

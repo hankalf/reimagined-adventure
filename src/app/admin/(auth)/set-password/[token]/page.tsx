@@ -17,5 +17,5 @@ export default async function SetPasswordPage({ params }: PageProps<"/admin/set-
       </div>
     );
   }
-  return <SetPasswordForm token={token} name={user.name} email={user.email} firstTime={!user.passwordHash} />;
+  return <SetPasswordForm token={token} name={user.name} email={user.email ?? user.name} firstTime={!user.passwordHash} />;
 }

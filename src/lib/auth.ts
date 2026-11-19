@@ -34,7 +34,7 @@ function cookieOptions(maxAge: number) {
 
 // ---------- Admin sessions ----------
 
-export type AdminSession = { id: string; email: string; name: string; role: AdminRole };
+export type AdminSession = { id: string; email: string; name: string; role: AdminRole; username?: string; mustChangePassword?: boolean };
 
 export async function signAdminToken(session: AdminSession): Promise<string> {
   return new SignJWT({ email: session.email, name: session.name, role: session.role, kind: "admin" })
@@ -79,7 +79,7 @@ export async function getAdmin(): Promise<AdminSession | null> {
   if (!session) return null;
   const user = await db.adminUser.findUnique({ where: { id: session.id } });
   if (!user || !user.active || !user.passwordHash) return null;
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return { id: user.id, email: user.email ?? "", name: user.name, role: user.role, username: user.username, mustChangePassword: user.mustChangePassword };
 }
 
 /** For pages and server actions: redirect to login when not signed in; optionally require the ADMIN role. */
@@ -111,6 +111,26 @@ export function validatePassword(password: string): string | null {
   return null;
 }
 
+const TEMP_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+
+/** Readable one-time password like "Gift-7Kq2-mN9p-4xWz" (letters + digits, no ambiguous characters). */
+export function generateTempPassword(): string {
+  const bytes = randomBytes(12);
+  const chunk = (from: number) => [...bytes.subarray(from, from + 4)].map((b) => TEMP_ALPHABET[b % TEMP_ALPHABET.length]).join("");
+  return `Gift-${chunk(0)}-${chunk(4)}-${chunk(8)}`;
+}
+
+export function normalizeUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/** Find an admin by username or email (both case-insensitive). */
+export async function findAdminByLogin(login: string) {
+  const key = normalizeUsername(login);
+  if (!key) return null;
+  return db.adminUser.findFirst({ where: { OR: [{ username: key }, { email: key }] } });
+}
+
 export function newInviteToken(): { token: string; expiresAt: Date } {
   return { token: randomBytes(32).toString("hex"), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) };
 }
@@ -123,17 +143,17 @@ export async function bootstrapAdmin(): Promise<void> {
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) return;
   await db.adminUser.create({
-    data: { email, name: "Administrator", role: "ADMIN", passwordHash: await hashPassword(password) },
+    data: { email, username: email, name: "Administrator", role: "ADMIN", passwordHash: await hashPassword(password) },
   });
   console.log(`[auth] Created first admin user ${email} from environment variables.`);
 }
 
 // ---------- Employee sessions (campaign-scoped) ----------
 
-export type EmployeeSession = { employeeId: string; campaignId: string };
+export type EmployeeSession = { employeeId: string; campaignId: string; preview: boolean };
 
-export async function setEmployeeCookie(session: EmployeeSession): Promise<void> {
-  const token = await new SignJWT({ campaignId: session.campaignId, kind: "employee" })
+export async function setEmployeeCookie(session: Omit<EmployeeSession, "preview"> & { preview?: boolean }): Promise<void> {
+  const token = await new SignJWT({ campaignId: session.campaignId, kind: "employee", preview: session.preview ? 1 : 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(session.employeeId)
     .setIssuedAt()
@@ -141,6 +161,16 @@ export async function setEmployeeCookie(session: EmployeeSession): Promise<void>
     .sign(secretKey());
   const store = await cookies();
   store.set(EMPLOYEE_COOKIE, token, cookieOptions(EMPLOYEE_TTL_SEC));
+}
+
+/** Signed token an admin uses to open the employee pages as a given employee without saving choices. */
+export async function signPreviewToken(session: { employeeId: string; campaignId: string }): Promise<string> {
+  return new SignJWT({ campaignId: session.campaignId, kind: "employee", preview: 1 })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(session.employeeId)
+    .setIssuedAt()
+    .setExpirationTime(`${EMPLOYEE_TTL_SEC}s`)
+    .sign(secretKey());
 }
 
 export async function clearEmployeeCookie(): Promise<void> {
@@ -156,7 +186,7 @@ export async function getEmployeeSession(campaignId: string): Promise<EmployeeSe
     const { payload } = await jwtVerify(token, secretKey());
     if (payload.kind !== "employee" || typeof payload.sub !== "string") return null;
     if (payload.campaignId !== campaignId) return null;
-    return { employeeId: payload.sub, campaignId };
+    return { employeeId: payload.sub, campaignId, preview: payload.preview === 1 };
   } catch {
     return null;
   }

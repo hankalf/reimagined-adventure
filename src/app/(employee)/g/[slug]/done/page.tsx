@@ -7,7 +7,7 @@ import { imageSrcForOption } from "@/lib/image-src";
 import { getLang } from "@/lib/lang";
 import { qrDataUrl } from "@/lib/qr";
 import { optionDetail } from "@/lib/options";
-import { DancingElf } from "@/components/dancing-elf";
+import { DancingMascot } from "@/components/dancing-mascot";
 import { ItemThumb } from "@/components/item-thumb";
 import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
@@ -18,6 +18,7 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
   const t = dict(lang);
   const session = await getEmployeeSession(campaign.id);
   if (!session) redirect(`/g/${slug}`);
+  if (session.preview) redirect(`/g/${slug}/pick`);
 
   const [selection, employee] = await Promise.all([
     db.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: session.employeeId } }, include: { item: { include: { images: true } } } }),
@@ -38,10 +39,14 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
       <div className="card overflow-hidden">
         <div className="flex items-center justify-center gap-4 p-6 text-center" style={{ background: `linear-gradient(135deg, ${campaign.primaryColor}, ${campaign.accentColor})` }}>
           {campaign.mascotEnabled && campaign.mascotShowOnDone && (
-            <DancingElf
+            <DancingMascot
+              kind={campaign.mascotKind}
               faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
               faceZoom={campaign.mascotFaceZoom}
+              faceOffsetX={campaign.mascotFaceOffsetX}
               faceOffsetY={campaign.mascotFaceOffsetY}
+              faceRotate={campaign.mascotFaceRotate}
+              faceFlip={campaign.mascotFaceFlip}
               size={90}
               snow={false}
               tapHint={t.mascot.tap}

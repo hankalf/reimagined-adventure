@@ -30,11 +30,11 @@ export async function importEmployeesAction(_prev: ImportState, formData: FormDa
   for (const row of parsed.rows) {
     const existing = await db.employee.findUnique({ where: { employeeNumber: row.employeeNumber } });
     if (existing) {
-      await db.employee.update({ where: { id: existing.id }, data: { firstName: row.firstName || existing.firstName, lastName: row.lastName, department: row.department ?? existing.department, active: true } });
+      await db.employee.update({ where: { id: existing.id }, data: { firstName: row.firstName || existing.firstName, lastName: row.lastName, department: row.department ?? existing.department, email: row.email ?? existing.email, active: true } });
       ids.push(existing.id);
       updated += 1;
     } else {
-      const e = await db.employee.create({ data: { employeeNumber: row.employeeNumber, firstName: row.firstName, lastName: row.lastName, department: row.department } });
+      const e = await db.employee.create({ data: { employeeNumber: row.employeeNumber, firstName: row.firstName, lastName: row.lastName, department: row.department, email: row.email } });
       ids.push(e.id);
       created += 1;
     }
@@ -73,6 +73,7 @@ const employeeSchema = z.object({
   firstName: z.string().trim().max(80).optional().default(""),
   lastName: z.string().trim().min(1, "Last name is required").max(80),
   department: z.string().trim().max(80).optional(),
+  email: z.string().trim().toLowerCase().max(160).optional(),
   active: z.string().optional(),
 });
 
@@ -86,6 +87,7 @@ export async function saveEmployeeAction(_prev: EmployeeFormState, formData: For
     firstName: formData.get("firstName") ?? "",
     lastName: formData.get("lastName"),
     department: formData.get("department") ?? "",
+    email: formData.get("email") ?? "",
     active: formData.get("active") ?? undefined,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
@@ -93,7 +95,8 @@ export async function saveEmployeeAction(_prev: EmployeeFormState, formData: For
   const employeeNumber = normalizeEmployeeNumber(d.employeeNumber);
   const clash = await db.employee.findUnique({ where: { employeeNumber } });
   if (clash && clash.id !== d.id) return { error: `Employee number ${employeeNumber} already exists (${clash.firstName} ${clash.lastName}).` };
-  const data = { employeeNumber, firstName: d.firstName, lastName: d.lastName, department: d.department || null, active: d.id ? d.active === "on" : true };
+  if (d.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) return { error: "Enter a valid email address or leave it empty." };
+  const data = { employeeNumber, firstName: d.firstName, lastName: d.lastName, department: d.department || null, email: d.email || null, active: d.id ? d.active === "on" : true };
   if (d.id) {
     await db.employee.update({ where: { id: d.id }, data });
     await audit({ actorType: "ADMIN", actorId: admin.id, action: "employee.updated", entityType: "Employee", entityId: d.id });

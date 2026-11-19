@@ -14,6 +14,7 @@ import {
 import { dec } from "./utils";
 import { offeredGroups, optionGroups, removedValues, validatePick, type OptionGroup } from "./options";
 import { notifySelections } from "./webhook";
+import { notifyReadyForPickup } from "./notify-employee";
 
 export type PickItem = {
   id: string;
@@ -325,6 +326,7 @@ export async function updateSelectionStatuses(input: { ids: string[]; status: "S
   const res = await db.selection.updateMany({ where: { id: { in: input.ids }, status: { not: "NEEDS_REPICK" } }, data });
   await audit({ actorType: "ADMIN", actorId: input.adminId, action: `selection.status.${input.status.toLowerCase()}`, entityType: "Selection", entityId: input.ids.length === 1 ? input.ids[0] : "bulk", meta: { count: res.count, ids: input.ids.slice(0, 200) } });
   if (res.count > 0) await notifySelections("selection.status_changed", input.ids, { newStatus: input.status });
+  if (res.count > 0 && input.status === "RECEIVED") await notifyReadyForPickup(input.ids);
   return res.count;
 }
 

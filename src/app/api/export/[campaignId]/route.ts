@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { buildOrdersWorkbook } from "@/lib/excel";
+import { buildNotPickedByDepartmentWorkbook, buildOrdersWorkbook } from "@/lib/excel";
 import { budgetCsv, buildReportData, detailCsv, notPickedCsv, summaryCsv } from "@/lib/report";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,16 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/export/[
   const data = await buildReportData(campaign.id);
   const stamp = data.generatedAt.toISOString().slice(0, 10);
 
+  if (type === "notpicked-xlsx") {
+    const buf = await buildNotPickedByDepartmentWorkbook(data);
+    return new NextResponse(new Uint8Array(buf), {
+      headers: {
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": `attachment; filename="${campaign.slug}-reminders-by-department-${stamp}.xlsx"`,
+        "cache-control": "no-store",
+      },
+    });
+  }
   if (type === "xlsx") {
     const buf = await buildOrdersWorkbook(data, { onlyNew });
     return new NextResponse(new Uint8Array(buf), {

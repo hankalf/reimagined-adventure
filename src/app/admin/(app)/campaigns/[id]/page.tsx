@@ -1,24 +1,23 @@
 import Link from "next/link";
 import { Stat } from "@/components/admin/page-header";
+import { Alert } from "@/components/ui";
+import { launchStatus } from "@/lib/launch";
+import { eligibleEmployees } from "@/lib/report";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
 import { appUrl, fmtDate, money } from "@/lib/utils";
 
-export default async function CampaignOverviewPage({ params }: PageProps<"/admin/campaigns/[id]">) {
+export default async function CampaignOverviewPage({ params, searchParams }: PageProps<"/admin/campaigns/[id]">) {
   const { id } = await params;
-  const [campaign, data] = await Promise.all([db.campaign.findUniqueOrThrow({ where: { id } }), buildReportData(id)]);
+  const sp = await searchParams;
+  const [campaign, data, launch] = await Promise.all([db.campaign.findUniqueOrThrow({ where: { id } }), buildReportData(id), launchStatus(id)]);
+  const previewEmployees = (await eligibleEmployees(campaign)).slice(0, 200).map((e) => ({ id: e.employee.id, label: `${e.employee.employeeNumber} — ${e.employee.firstName} ${e.employee.lastName}` }));
   const base = `/admin/campaigns/${id}`;
   const url = `${appUrl()}/g/${campaign.slug}`;
   const pct = data.counts.eligible > 0 ? Math.round((data.counts.picked / data.counts.eligible) * 100) : 0;
-  const checklist = [
-    { done: data.summary.length > 0 || (await db.campaignItem.count({ where: { campaignId: id } })) > 0, label: "Add gifts to show", href: `${base}/items` },
-    { done: data.counts.eligible > 0, label: "Upload the employee list", href: `${base}/employees` },
-    { done: Boolean(campaign.welcomeMessage || campaign.logoImageId), label: "Add a welcome message and logo", href: `${base}/branding` },
-    { done: campaign.status === "OPEN", label: "Open the campaign and print the QR poster", href: `${base}/poster` },
-  ];
-
   return (
     <div className="space-y-6">
+      {typeof sp.error === "string" && <Alert kind="error">{sp.error}</Alert>}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Picked" value={`${data.counts.picked} / ${data.counts.eligible}`} hint={`${pct}% of eligible employees`} />
         <Stat label="Waiting to order" value={data.counts.toOrder} tone={data.counts.toOrder > 0 ? "warn" : "default"} />
@@ -33,17 +32,48 @@ export default async function CampaignOverviewPage({ params }: PageProps<"/admin
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="card p-5 lg:col-span-2">
-          <h2 className="mb-3 font-semibold">Setup checklist</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Launch checklist</h2>
+            <span className={`badge ${launch.canOpen ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{launch.canOpen ? "Ready to open" : `${launch.blockers.length} blocker(s)`}</span>
+          </div>
           <ul className="space-y-2">
-            {checklist.map((c) => (
-              <li key={c.label} className="flex items-center gap-3 text-sm">
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${c.done ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>{c.done ? "✓" : "•"}</span>
-                <Link href={c.href} className={c.done ? "text-slate-500 line-through" : "text-slate-800 hover:underline"}>
-                  {c.label}
-                </Link>
+            {launch.checks.map((c) => (
+              <li key={c.key} className="flex items-start gap-3 text-sm">
+                <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${c.ok ? "bg-emerald-100 text-emerald-700" : c.blocking ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{c.ok ? "✓" : c.blocking ? "!" : "•"}</span>
+                <div>
+                  <Link href={c.href} className={c.ok ? "text-slate-500 line-through" : "text-slate-800 hover:underline"}>
+                    {c.label}
+                  </Link>
+                  {!c.ok && c.blocking && <span className="ml-2 text-xs text-red-700">required</span>}
+                  {c.detail && <div className="text-xs text-slate-500">{c.detail}</div>}
+                </div>
               </li>
             ))}
+            <li className="flex items-center gap-3 text-sm">
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${campaign.status === "OPEN" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>{campaign.status === "OPEN" ? "✓" : "•"}</span>
+              <Link href={`${base}/poster`} className={campaign.status === "OPEN" ? "text-slate-500 line-through" : "text-slate-800 hover:underline"}>
+                Open the campaign and print the QR poster
+              </Link>
+            </li>
           </ul>
+          <form method="get" action={`${base}/preview`} className="mt-4 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-3">
+            <div className="min-w-[220px] flex-1">
+              <label htmlFor="preview-employee" className="label">
+                Preview as employee (nothing is saved)
+              </label>
+              <select id="preview-employee" name="employeeId" className="input">
+                {previewEmployees.length === 0 && <option value="">Add employees first</option>}
+                {previewEmployees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="btn-secondary" formTarget="_blank" disabled={previewEmployees.length === 0}>
+              👀 Open preview
+            </button>
+          </form>
           <h2 className="mb-3 mt-6 font-semibold">Top gifts</h2>
           {data.summary.length === 0 ? (
             <p className="text-sm text-slate-500">No selections yet.</p>

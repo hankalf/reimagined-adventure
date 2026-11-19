@@ -6,15 +6,15 @@ describe("parseEmployeeCsv", () => {
     const res = parseEmployeeCsv("employee_number,first_name,last_name,department,budget\n10001,Maria,García,Ops,75\n 10002 ,James,Smith,Finance,$150.00\n");
     expect(res.errors).toEqual([]);
     expect(res.rows).toEqual([
-      { employeeNumber: "10001", firstName: "Maria", lastName: "García", department: "Ops", budget: 75 },
-      { employeeNumber: "10002", firstName: "James", lastName: "Smith", department: "Finance", budget: 150 },
+      { employeeNumber: "10001", firstName: "Maria", lastName: "García", department: "Ops", email: null, budget: 75 },
+      { employeeNumber: "10002", firstName: "James", lastName: "Smith", department: "Finance", email: null, budget: 150 },
     ]);
   });
   it("matches loose header names and a single name column", () => {
     const res = parseEmployeeCsv("﻿Emp No;Name;Dept\n7;Ana de la Cruz;Ops\n8;\"Smith, John\";Sales\n");
     expect(res.rows).toEqual([
-      { employeeNumber: "7", firstName: "Ana", lastName: "de la Cruz", department: "Ops", budget: null },
-      { employeeNumber: "8", firstName: "John", lastName: "Smith", department: "Sales", budget: null },
+      { employeeNumber: "7", firstName: "Ana", lastName: "de la Cruz", department: "Ops", email: null, budget: null },
+      { employeeNumber: "8", firstName: "John", lastName: "Smith", department: "Sales", email: null, budget: null },
     ]);
   });
   it("skips blanks and reports duplicates and missing names", () => {
@@ -28,6 +28,14 @@ describe("parseEmployeeCsv", () => {
     const res = parseEmployeeCsv("name,email\nA B,a@b.c\n");
     expect(res.rows).toEqual([]);
     expect(res.errors[0]).toMatch(/employee number column/);
+  });
+});
+
+describe("email column", () => {
+  it("reads a valid email and drops junk", () => {
+    const res = parseEmployeeCsv("employee_number,last_name,email\n1,Lee,Lee@Example.com\n2,Kim,not-an-email\n");
+    expect(res.rows[0].email).toBe("lee@example.com");
+    expect(res.rows[1].email).toBeNull();
   });
 });
 

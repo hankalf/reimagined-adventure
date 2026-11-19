@@ -2,6 +2,7 @@ import Link from "next/link";
 import { dict } from "@/i18n";
 import { getLang } from "@/lib/lang";
 import { loadCampaign } from "./campaign";
+import { A11yToggle } from "@/components/a11y-toggle";
 
 // Employee pages depend on cookies and live campaign data; never prerender at build time.
 export const dynamic = "force-dynamic";
@@ -27,13 +28,16 @@ export default async function EmployeeLayout({ children, params }: LayoutProps<"
             )}
             <span className="truncate font-semibold text-slate-800">{campaign.companyName ?? campaign.name}</span>
           </Link>
-          <a
-            href={`/g/${campaign.slug}/lang?set=${other}`}
-            className="rounded-full border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            aria-label={`Switch language to ${t.switchTo}`}
-          >
-            {t.switchTo}
-          </a>
+          <div className="flex items-center gap-2">
+            <A11yToggle labels={t.a11y} />
+            <a
+              href={`/g/${campaign.slug}/lang?set=${other}`}
+              className="rounded-full border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              aria-label={`Switch language to ${t.switchTo}`}
+            >
+              {t.switchTo}
+            </a>
+          </div>
         </div>
       </header>
       {children}

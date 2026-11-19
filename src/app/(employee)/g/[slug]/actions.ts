@@ -71,6 +71,7 @@ export async function chooseAction(_prev: ChooseState, formData: FormData): Prom
   if (!campaign) return { error: t.errors.generic };
   const session = await getEmployeeSession(campaign.id);
   if (!session) return { error: t.errors.sessionExpired };
+  if (session.preview) return { error: t.errors.preview };
 
   const result = await submitSelection({ campaignId: campaign.id, employeeId: session.employeeId, itemId, option1Value: option1Value ?? null, option2Value: option2Value ?? null, lang });
   if (!result.ok) {

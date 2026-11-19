@@ -10,10 +10,10 @@ export function LoginForm({ next }: { next: string }) {
     <form action={action} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div>
-        <label htmlFor="email" className="label">
-          Email
+        <label htmlFor="login" className="label">
+          Username
         </label>
-        <input id="email" name="email" type="email" className="input" autoComplete="username" required autoFocus />
+        <input id="login" name="login" className="input" autoComplete="username" required autoFocus placeholder="username or email" />
       </div>
       <div>
         <label htmlFor="password" className="label">

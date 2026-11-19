@@ -21,10 +21,20 @@ export const es: Dictionary = {
     daysLeft: "Quedan {n} días para elegir",
     lastDay: "¡Último día para elegir!",
     aMessageFrom: "Un mensaje de {name}",
+    pickCount: "{n} de tus compañeros ya eligieron su regalo",
+    previewBanner: "Modo de vista previa: estás viendo esto como {name}. Las elecciones no se guardan.",
+    watchVideo: "Un mensaje para ti",
   },
 
   mascot: {
     tap: "¡Toca al elfo para que baile más rápido!",
+  },
+
+  a11y: {
+    largerText: "Texto más grande",
+    normalText: "Texto normal",
+    highContrast: "Alto contraste",
+    normalContrast: "Colores normales",
   },
 
   pick: {
@@ -39,6 +49,13 @@ export const es: Dictionary = {
     overBudget: "Excede tu presupuesto",
     perk: "Beneficio",
     noResults: "Ningún regalo coincide con tu búsqueda.",
+    surpriseMe: "Sorpréndeme",
+    shortlist: "Favoritos",
+    shortlistAdd: "Agregar a favoritos",
+    shortlistRemove: "Quitar de favoritos",
+    shortlistOnly: "Ver mis favoritos ({n})",
+    shortlistAll: "Ver todos los regalos",
+    shortlistEmpty: "Toca el corazón en los regalos que te gusten para compararlos aquí.",
     viewDetails: "Ver detalles",
     selectThis: "Elegir este regalo",
     chooseOption: "Elige {label}",
@@ -84,6 +101,7 @@ export const es: Dictionary = {
     itemUnavailable: "Lo sentimos, ese regalo ya no está disponible. Elige otro.",
     overBudget: "Ese regalo excede tu presupuesto. Elige otro.",
     notEligible: "No eres elegible para este programa de regalos. Contacta a Recursos Humanos.",
+    preview: "Esto es una vista previa. Las elecciones no se guardan en este modo.",
     generic: "Algo salió mal. Inténtalo de nuevo.",
   },
 };

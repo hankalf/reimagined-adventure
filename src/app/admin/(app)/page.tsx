@@ -3,6 +3,7 @@ import { Alert, StatusBadge } from "@/components/ui";
 import { PageHeader, Stat } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
+import { needsAttention } from "@/lib/attention";
 import { money } from "@/lib/utils";
 
 export default async function DashboardPage({ searchParams }: PageProps<"/admin">) {
@@ -11,6 +12,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin"
   const reports = await Promise.all(campaigns.map((c) => buildReportData(c.id)));
   const [itemCount, employeeCount] = await Promise.all([db.item.count({ where: { active: true } }), db.employee.count({ where: { active: true } })]);
 
+  const attention = await needsAttention();
   const openReports = reports.filter((r) => r.campaign.status === "OPEN");
   const toOrder = reports.reduce((a, r) => a + r.counts.toOrder, 0);
   const needsRepick = reports.reduce((a, r) => a + r.counts.needsRepick, 0);
@@ -45,6 +47,22 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin"
         <Stat label="Need a re-pick" value={needsRepick} tone={needsRepick > 0 ? "warn" : "good"} hint="Chosen gift went out of stock" />
         <Stat label="Catalog" value={itemCount} hint={`${employeeCount} active employees`} />
       </div>
+
+      <h2 className="mb-3 mt-8 text-lg font-semibold text-slate-900">Needs attention</h2>
+      {attention.length === 0 ? (
+        <div className="card p-4 text-sm text-emerald-800">✓ Nothing needs your attention right now.</div>
+      ) : (
+        <ul className="card divide-y divide-slate-100" data-attention>
+          {attention.map((a, i) => (
+            <li key={i}>
+              <Link href={a.href} className="flex items-start gap-3 px-4 py-2.5 text-sm hover:bg-slate-50">
+                <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${a.level === "warn" ? "bg-amber-500" : "bg-blue-400"}`} />
+                <span className="text-slate-800">{a.text}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <h2 className="mb-3 mt-8 text-lg font-semibold text-slate-900">Campaigns</h2>
       {reports.length === 0 ? (

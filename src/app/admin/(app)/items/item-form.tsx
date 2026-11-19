@@ -391,6 +391,11 @@ export function ItemForm({ initial, categories }: { initial: ItemFormValues; cat
           className="input mt-3"
           onChange={(e) => setExtraPreviews(Array.from(e.target.files ?? []).map((f) => URL.createObjectURL(f)))}
         />
+        <label htmlFor="extraImageUrls" className="label mt-3">
+          …or paste photo links (one per line)
+        </label>
+        <textarea id="extraImageUrls" name="extraImageUrls" rows={3} className="input font-mono text-xs" placeholder={"https://m.media-amazon.com/images/I/…jpg\nhttps://…"} />
+        <p className="mt-1 text-xs text-slate-500">Linked photos are downloaded and stored in the portal when you save, so they keep working if the store changes them.</p>
       </div>
 
       {color1Values.length > 0 && (
@@ -426,6 +431,15 @@ export function ItemForm({ initial, categories }: { initial: ItemFormValues; cat
                           setColorPreviews((p) => ({ ...p, [value]: URL.createObjectURL(f) }));
                           setRemovedColors((prev) => { const n = new Set(prev); n.delete(value); return n; });
                         }
+                      }}
+                    />
+                    <input
+                      name={`colorImageUrl:${value}`}
+                      className="input mt-1 py-1 text-xs"
+                      placeholder="or paste a photo link"
+                      onChange={(e) => {
+                        const v = e.target.value.trim();
+                        if (/^https?:\/\//i.test(v)) setColorPreviews((p) => ({ ...p, [value]: v }));
                       }}
                     />
                     {existingImg && !removed && !colorPreviews[value] && (

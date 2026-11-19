@@ -32,7 +32,7 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 ## Deploy on Railway
 
 1. **Create a project** on Railway and add a **PostgreSQL** database.
-2. **Add a service from this GitHub repo.** Railway detects Node and uses `railway.json` / `nixpacks.toml` (build: `npm run build`, start: `npm run start:railway`, which runs `prisma migrate deploy` then `next start`).
+2. **Add a service from this GitHub repo.** `railway.json` selects Railway's Railpack builder, and `.node-version` / `engines` pin Node 22 (latest 22.x; Prisma 7 needs 22.12+, which the older Nixpacks builder cannot provide). Build is `npm ci && npm run build`; start is `npm run start:railway`, which runs `prisma migrate deploy` then `next start`. Set the variables below **before** the first build: `postinstall` runs `prisma generate`, which reads `DATABASE_URL`.
 3. **Set variables** on the app service (Variables tab):
 
    | Variable | Required | Notes |

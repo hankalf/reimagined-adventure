@@ -16,8 +16,8 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - English/Spanish toggle, defaulting to the browser language; campaign and item text can be entered in both languages.
 
 **Admins / HR**
-- Gift catalog: paste an Amazon link (ASIN extracted, canonical link stored, details prefilled when Amazon allows it), upload a photo (resized + thumbnail generated automatically), options, cost, category. Custom non-purchase gifts with a "how HR fulfils this" note.
-- Campaigns: choose which gifts to show and in what order, per-campaign stock limits and cost overrides, mark out of stock (affected employees flagged for re-pick).
+- Gift catalog: paste an Amazon link (ASIN extracted, canonical link stored, details prefilled when Amazon allows it), upload a photo (resized + thumbnail generated automatically), up to two option groups (e.g. Color and Size), cost, category. Custom non-purchase gifts with a "how HR fulfils this" note. Bulk import from an Excel/CSV spreadsheet with a downloadable template (see below).
+- Campaigns: choose which gifts to show and in what order, and for gifts with options tick which colours/sizes are offered in that campaign; per-campaign stock limits and cost overrides; mark out of stock or untick a colour (affected employees flagged for re-pick).
 - Employees: master list with CSV import (`employee_number, first_name, last_name, department, budget`), per-campaign eligibility and budget tiers, pick on behalf of a walk-up employee, reset a selection.
 - Orders: main list grouped by gift (quantities, unit cost, subtotal, Amazon link), custom gifts in their own section, per-row and bulk status changes (to order → ordered → received → collected), pickup-day search by employee number.
 - Pickup kiosk (`/admin/campaigns/<id>/kiosk`): full-screen page for the front desk. Scan the QR code on the employee's confirmation page with the device camera (BarcodeDetector where available, jsQR fallback), or type/USB-scan the confirmation code, employee number or name; see who they are and what they chose; mark collected in one tap with undo. Live collected/ready counters.
@@ -97,6 +97,25 @@ employee_number,first_name,last_name,department,budget
 ```
 
 Uploading on a campaign's Employees tab marks those people eligible for that campaign (and sets per-person budgets); uploading on the global Employees page updates the master list.
+
+## Gift catalog import (Excel/CSV)
+
+Admin → Gift catalog → "Import gifts from a spreadsheet". Download the Excel or CSV template, fill one row per gift, upload it back. Headers are matched loosely; only `name` is required.
+
+| Column | Notes |
+| --- | --- |
+| `name`, `name_es` | Gift name (English; optional Spanish) |
+| `description`, `description_es` | Descriptions |
+| `category` | Used for the employee filter |
+| `type` | `product` (default) or `custom` (HR arranges it, e.g. PTO) |
+| `amazon_url` | Amazon/store link; the ASIN is extracted and the link normalised |
+| `asin`, `sku` | Identifiers; re-imports match existing gifts by ASIN, then SKU, then name |
+| `unit_cost` | Cost per unit |
+| `option1_label`, `option1_values`, `option2_label`, `option2_values` | Option groups, values separated by commas or `\|` |
+| `colors`, `sizes` | Shortcuts that fill the option groups with labels Color / Size |
+| `image_url` | Photo link; the importer can download and store it |
+| `fulfillment_note` | Custom gifts: how HR fulfils it |
+| `active` | yes/no |
 
 ## Ideas for later
 

@@ -12,6 +12,7 @@ import {
   lastNameMatches,
 } from "./selection-rules";
 import { dec } from "./utils";
+import { offeredGroups, optionGroups, removedValues, validatePick, type OptionGroup } from "./options";
 
 export type PickItem = {
   id: string;
@@ -25,8 +26,8 @@ export type PickItem = {
   imageUrl: string | null;
   productUrl: string | null;
   fulfillmentNote: string | null;
-  optionLabel: string | null;
-  optionValues: string[];
+  /** Option groups offered in this campaign (catalog values filtered by the campaign's enabled subset). */
+  groups: OptionGroup[];
   cost: number | null;
   available: boolean;
   soldOut: boolean;
@@ -103,8 +104,7 @@ export async function getPickContext(campaignId: string, employeeId: string) {
       imageUrl: ci.item.imageUrl,
       productUrl: ci.item.productUrl,
       fulfillmentNote: ci.item.fulfillmentNote,
-      optionLabel: ci.item.optionLabel,
-      optionValues: ci.item.optionValues,
+      groups: offeredGroups(ci.item, ci),
       cost,
       available: avail.available,
       soldOut: avail.soldOut,
@@ -146,7 +146,8 @@ export async function submitSelection(input: {
   campaignId: string;
   employeeId: string;
   itemId: string;
-  optionValue: string | null;
+  option1Value: string | null;
+  option2Value: string | null;
   lang: string;
   onBehalfOfAdminId?: string;
 }): Promise<SubmitResult> {
@@ -169,10 +170,8 @@ export async function submitSelection(input: {
           const ci = await tx.campaignItem.findUnique({ where: { campaignId_itemId: { campaignId: campaign.id, itemId: input.itemId } }, include: { item: true } });
           if (!ci) return { ok: false as const, error: "unknown_item" as const };
 
-          if (ci.item.optionValues.length > 0) {
-            if (!input.optionValue) return { ok: false as const, error: "option_required" as const };
-            if (!ci.item.optionValues.includes(input.optionValue)) return { ok: false as const, error: "invalid_option" as const };
-          }
+          const picked = validatePick(ci.item, ci, { option1Value: input.option1Value, option2Value: input.option2Value });
+          if (!picked.ok) return { ok: false as const, error: picked.error };
 
           const taken = await tx.selection.count({
             where: { campaignId: campaign.id, itemId: input.itemId, status: { in: [...COMMITTED_STATUSES] }, NOT: existing ? { id: existing.id } : undefined },
@@ -187,7 +186,8 @@ export async function submitSelection(input: {
 
           const data = {
             itemId: input.itemId,
-            optionValue: input.optionValue || null,
+            option1Value: picked.values.option1Value,
+            option2Value: picked.values.option2Value,
             costAtSelection: cost,
             status: "SELECTED" as const,
             language: input.lang,
@@ -217,7 +217,7 @@ export async function submitSelection(input: {
               action: existing ? "selection.changed" : "selection.created",
               entityType: "Selection",
               entityId: selectionId,
-              meta: { previousItemId: existing?.itemId ?? null, previousStatus: existing?.status ?? null, itemId: input.itemId, optionValue: input.optionValue, cost },
+              meta: { previousItemId: existing?.itemId ?? null, previousStatus: existing?.status ?? null, itemId: input.itemId, option1Value: picked.values.option1Value, option2Value: picked.values.option2Value, cost },
             },
           });
           return { ok: true as const, selectionId, confirmationCode, changed: Boolean(existing) };
@@ -258,6 +258,55 @@ export async function setCampaignItemStock(input: { campaignId: string; itemId: 
   return { affected };
 }
 
+export type SetOptionsResult = { ok: true; affected: number; removed1: string[]; removed2: string[] } | { ok: false; error: string };
+
+/**
+ * Change which option values a campaign offers for a gift. Employees who chose a value that is no longer
+ * offered (and whose gift has not been ordered yet) are flagged to re-pick, like an out-of-stock gift.
+ */
+export async function setCampaignItemOptions(input: {
+  campaignId: string;
+  itemId: string;
+  enabledOption1Values: string[];
+  enabledOption2Values: string[];
+  adminId: string;
+}): Promise<SetOptionsResult> {
+  const ci = await db.campaignItem.findUnique({ where: { campaignId_itemId: { campaignId: input.campaignId, itemId: input.itemId } }, include: { item: true } });
+  if (!ci) return { ok: false, error: "Gift is not in this campaign." };
+  const groups = optionGroups(ci.item);
+  const g1 = groups.find((g) => g.index === 1);
+  const g2 = groups.find((g) => g.index === 2);
+  // Keep only values the catalog actually defines; store [] (= all) when every value is ticked.
+  const clean = (values: string[], catalog: string[]) => {
+    const kept = catalog.filter((v) => values.includes(v));
+    return kept.length === catalog.length ? [] : kept;
+  };
+  const enabled1 = g1 ? clean(input.enabledOption1Values, g1.values) : [];
+  const enabled2 = g2 ? clean(input.enabledOption2Values, g2.values) : [];
+  if (g1 && g1.values.filter((v) => enabled1.length === 0 || enabled1.includes(v)).length === 0) return { ok: false, error: `Offer at least one ${g1.label} value, or remove the gift from the campaign.` };
+  if (g2 && g2.values.filter((v) => enabled2.length === 0 || enabled2.includes(v)).length === 0) return { ok: false, error: `Offer at least one ${g2.label} value, or remove the gift from the campaign.` };
+
+  const removed1 = g1 ? removedValues(g1.values, ci.enabledOption1Values, enabled1) : [];
+  const removed2 = g2 ? removedValues(g2.values, ci.enabledOption2Values, enabled2) : [];
+  await db.campaignItem.update({ where: { campaignId_itemId: { campaignId: input.campaignId, itemId: input.itemId } }, data: { enabledOption1Values: enabled1, enabledOption2Values: enabled2 } });
+
+  let affected = 0;
+  if (removed1.length > 0 || removed2.length > 0) {
+    const res = await db.selection.updateMany({
+      where: {
+        campaignId: input.campaignId,
+        itemId: input.itemId,
+        status: "SELECTED",
+        OR: [...(removed1.length > 0 ? [{ option1Value: { in: removed1 } }] : []), ...(removed2.length > 0 ? [{ option2Value: { in: removed2 } }] : [])],
+      },
+      data: { status: "NEEDS_REPICK" },
+    });
+    affected = res.count;
+  }
+  await audit({ actorType: "ADMIN", actorId: input.adminId, action: "item.options_changed", entityType: "CampaignItem", entityId: `${input.campaignId}:${input.itemId}`, meta: { enabled1, enabled2, removed1, removed2, affected } });
+  return { ok: true, affected, removed1, removed2 };
+}
+
 export async function updateSelectionStatuses(input: { ids: string[]; status: "SELECTED" | "ORDERED" | "RECEIVED" | "COLLECTED"; adminId: string }): Promise<number> {
   if (input.ids.length === 0) return 0;
   const now = new Date();
@@ -282,12 +331,13 @@ export async function resetSelection(selectionId: string, adminId: string): Prom
   await audit({ actorType: "ADMIN", actorId: adminId, action: "selection.reset", entityType: "Selection", entityId: selectionId, meta: { employeeId: existing.employeeId, itemId: existing.itemId, status: existing.status } });
 }
 
-export function serializeSelection(selection: { id: string; itemId: string; optionValue: string | null; confirmationCode: string; status: string; costAtSelection: unknown; selectedAt: Date } | null) {
+export function serializeSelection(selection: { id: string; itemId: string; option1Value: string | null; option2Value: string | null; confirmationCode: string; status: string; costAtSelection: unknown; selectedAt: Date } | null) {
   if (!selection) return null;
   return {
     id: selection.id,
     itemId: selection.itemId,
-    optionValue: selection.optionValue,
+    option1Value: selection.option1Value,
+    option2Value: selection.option2Value,
     confirmationCode: selection.confirmationCode,
     status: selection.status,
     cost: dec(selection.costAtSelection),

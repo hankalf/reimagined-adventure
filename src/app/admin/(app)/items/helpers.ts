@@ -8,7 +8,7 @@ export async function existingCategories(): Promise<string[]> {
 }
 
 export function emptyItem(): ItemFormValues {
-  return { type: "PRODUCT", name: "", nameEs: "", description: "", descriptionEs: "", category: "", productUrl: "", asin: "", sku: "", unitCost: "", fulfillmentNote: "", optionLabel: "", optionValues: "", imageUrl: "", imageId: null, active: true };
+  return { type: "PRODUCT", name: "", nameEs: "", description: "", descriptionEs: "", category: "", productUrl: "", asin: "", sku: "", unitCost: "", fulfillmentNote: "", option1Label: "", option1Values: "", option2Label: "", option2Values: "", imageUrl: "", imageId: null, active: true };
 }
 
 export function toFormValues(item: NonNullable<Awaited<ReturnType<typeof db.item.findUnique>>>, selectionCount: number): ItemFormValues {
@@ -25,8 +25,10 @@ export function toFormValues(item: NonNullable<Awaited<ReturnType<typeof db.item
     sku: item.sku ?? "",
     unitCost: dec(item.unitCost)?.toString() ?? "",
     fulfillmentNote: item.fulfillmentNote ?? "",
-    optionLabel: item.optionLabel ?? "",
-    optionValues: item.optionValues.join(", "),
+    option1Label: item.option1Label ?? "",
+    option1Values: item.option1Values.join(", "),
+    option2Label: item.option2Label ?? "",
+    option2Values: item.option2Values.join(", "),
     imageUrl: item.imageUrl ?? "",
     imageId: item.imageId,
     active: item.active,

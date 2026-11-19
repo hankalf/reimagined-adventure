@@ -57,7 +57,7 @@ async function main() {
   const items = [
     { name: "Wireless Noise-Cancelling Earbuds", nameEs: "Audífonos inalámbricos con cancelación de ruido", description: "Compact true-wireless earbuds with active noise cancelling and a charging case.", descriptionEs: "Audífonos compactos con cancelación activa de ruido y estuche de carga.", category: "Tech", asin: "B0CHWRXH8B", productUrl: "https://www.amazon.com/dp/B0CHWRXH8B", unitCost: 69.99, color: "#2563eb", label: "Earbuds" },
     { name: "Insulated Travel Tumbler 40 oz", nameEs: "Vaso térmico de viaje 40 oz", description: "Keeps drinks cold for 11 hours and hot for 7. Fits most cup holders.", descriptionEs: "Mantiene las bebidas frías 11 horas y calientes 7. Cabe en la mayoría de portavasos.", category: "Home", asin: "B0BZYCJK89", productUrl: "https://www.amazon.com/dp/B0BZYCJK89", unitCost: 45.0, optionLabel: "Color", optionValues: ["Black", "Cream", "Teal", "Rose"], color: "#0f766e", label: "Tumbler" },
-    { name: "Company Hoodie", nameEs: "Sudadera con capucha de la empresa", description: "Soft fleece hoodie with embroidered logo. Unisex sizing.", descriptionEs: "Sudadera de felpa suave con logo bordado. Tallas unisex.", category: "Apparel", asin: null, productUrl: "https://www.amazon.com/dp/B07P5RTMQ6", unitCost: 55.0, optionLabel: "Size", optionValues: ["S", "M", "L", "XL", "2XL", "3XL"], color: "#7c3aed", label: "Hoodie" },
+    { name: "Company Hoodie", nameEs: "Sudadera con capucha de la empresa", description: "Soft fleece hoodie with embroidered logo. Unisex sizing.", descriptionEs: "Sudadera de felpa suave con logo bordado. Tallas unisex.", category: "Apparel", asin: null, productUrl: "https://www.amazon.com/dp/B07P5RTMQ6", unitCost: 55.0, optionLabel: "Color", optionValues: ["Black", "Navy", "Heather Grey"], option2Label: "Size", option2Values: ["S", "M", "L", "XL", "2XL", "3XL"], color: "#7c3aed", label: "Hoodie" },
     { name: "Smart Speaker with Voice Assistant", nameEs: "Bocina inteligente con asistente de voz", description: "Compact smart speaker with rich sound. Great for the kitchen or desk.", descriptionEs: "Bocina inteligente compacta con sonido envolvente. Ideal para la cocina o el escritorio.", category: "Tech", asin: "B09B8V1LZ3", productUrl: "https://www.amazon.com/dp/B09B8V1LZ3", unitCost: 49.99, color: "#be123c", label: "Speaker" },
     { name: "Weekender Backpack", nameEs: "Mochila de fin de semana", description: "Water-resistant 30L backpack with laptop sleeve and shoe compartment.", descriptionEs: "Mochila de 30 L resistente al agua con funda para laptop y compartimento para zapatos.", category: "Travel", asin: "B08KFWF6GC", productUrl: "https://www.amazon.com/dp/B08KFWF6GC", unitCost: 72.5, optionLabel: "Color", optionValues: ["Black", "Navy", "Olive"], color: "#ca8a04", label: "Backpack" },
     { name: "Percussion Massage Gun", nameEs: "Pistola de masaje de percusión", description: "Deep-tissue massager with 5 heads and a quiet motor.", descriptionEs: "Masajeador de tejido profundo con 5 cabezales y motor silencioso.", category: "Wellness", asin: "B07ZK7ZRJ2", productUrl: "https://www.amazon.com/dp/B07ZK7ZRJ2", unitCost: 74.0, color: "#ea580c", label: "Massage" },
@@ -79,8 +79,10 @@ async function main() {
         asin: it.asin,
         productUrl: it.productUrl,
         unitCost: it.unitCost,
-        optionLabel: it.optionLabel ?? null,
-        optionValues: it.optionValues ?? [],
+        option1Label: it.optionLabel ?? null,
+        option1Values: it.optionValues ?? [],
+        option2Label: "option2Label" in it ? it.option2Label : null,
+        option2Values: "option2Values" in it ? it.option2Values : [],
       },
     });
     itemIds.push(row.id);
@@ -132,7 +134,7 @@ async function main() {
   const byNum = Object.fromEntries(created.map((e) => [e.employeeNumber, e.id]));
   await db.selection.createMany({
     data: [
-      { campaignId: campaign.id, employeeId: byNum["10002"], itemId: itemIds[1], optionValue: "Teal", confirmationCode: "DEMO01", costAtSelection: 45, status: "SELECTED" },
+      { campaignId: campaign.id, employeeId: byNum["10002"], itemId: itemIds[1], option1Value: "Teal", confirmationCode: "DEMO01", costAtSelection: 45, status: "SELECTED" },
       { campaignId: campaign.id, employeeId: byNum["10005"], itemId: itemIds[0], confirmationCode: "DEMO02", costAtSelection: 69.99, status: "ORDERED", orderedAt: new Date() },
       { campaignId: campaign.id, employeeId: byNum["10009"], itemId: pto.id, confirmationCode: "DEMO03", costAtSelection: 0, status: "SELECTED" },
     ],

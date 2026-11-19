@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { parseScanPayload } from "@/lib/kiosk";
 import { employeeNumberCandidates } from "@/lib/selection-rules";
 import { dec } from "@/lib/utils";
+import { optionDetail, optionSummary } from "@/lib/options";
 
 export type KioskSelection = {
   id: string;
@@ -15,8 +16,8 @@ export type KioskSelection = {
   department: string | null;
   itemName: string;
   itemNameEs: string | null;
-  optionLabel: string | null;
-  optionValue: string | null;
+  optionText: string;
+  optionDetail: string;
   imageId: string | null;
   imageUrl: string | null;
   status: string;
@@ -36,14 +37,15 @@ export type KioskLookup =
 
 function serialize(s: {
   id: string;
-  optionValue: string | null;
+  option1Value: string | null;
+  option2Value: string | null;
   confirmationCode: string;
   status: string;
   costAtSelection: unknown;
   receivedAt: Date | null;
   collectedAt: Date | null;
   employee: { employeeNumber: string; firstName: string; lastName: string; department: string | null };
-  item: { name: string; nameEs: string | null; optionLabel: string | null; imageId: string | null; imageUrl: string | null };
+  item: { name: string; nameEs: string | null; option1Label: string | null; option2Label: string | null; imageId: string | null; imageUrl: string | null };
 }): KioskSelection {
   return {
     id: s.id,
@@ -53,8 +55,8 @@ function serialize(s: {
     department: s.employee.department,
     itemName: s.item.name,
     itemNameEs: s.item.nameEs,
-    optionLabel: s.item.optionLabel,
-    optionValue: s.optionValue,
+    optionText: optionSummary(s),
+    optionDetail: optionDetail(s.item, s),
     imageId: s.item.imageId,
     imageUrl: s.item.imageUrl,
     status: s.status,
@@ -120,7 +122,7 @@ export async function kioskLookupAction(campaignId: string, rawQuery: string): P
     if (matches.length > 1) {
       return {
         kind: "multiple",
-        matches: matches.map((m) => ({ id: m.id, label: `${m.employee.firstName} ${m.employee.lastName} · ${m.employee.employeeNumber} · ${m.item.name}${m.optionValue ? ` (${m.optionValue})` : ""}`, status: m.status })),
+        matches: matches.map((m) => ({ id: m.id, label: `${m.employee.firstName} ${m.employee.lastName} · ${m.employee.employeeNumber} · ${m.item.name}${optionSummary(m) ? ` (${optionSummary(m)})` : ""}`, status: m.status })),
       };
     }
   }

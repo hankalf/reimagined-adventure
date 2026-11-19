@@ -7,7 +7,9 @@ import { canonicalAmazonUrl, extractAsin, fetchProductMetadata, isAmazonUrl } fr
 import { audit } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { processImage } from "@/lib/images";
+import { MAX_UPLOAD_BYTES, processImage } from "@/lib/images";
+import { parseItemFile } from "@/lib/item-import";
+import { parseOptionValues } from "@/lib/options";
 
 export type ItemFormState = { error?: string; success?: string } | null;
 
@@ -23,8 +25,10 @@ const itemSchema = z.object({
   sku: z.string().trim().max(80).optional(),
   unitCost: z.string().trim().optional(),
   fulfillmentNote: z.string().trim().max(2000).optional(),
-  optionLabel: z.string().trim().max(40).optional(),
-  optionValues: z.string().trim().max(1000).optional(),
+  option1Label: z.string().trim().max(40).optional(),
+  option1Values: z.string().trim().max(1000).optional(),
+  option2Label: z.string().trim().max(40).optional(),
+  option2Values: z.string().trim().max(1000).optional(),
   imageUrl: z.string().trim().max(2000).optional(),
   active: z.string().optional(),
   removeImage: z.string().optional(),
@@ -49,8 +53,10 @@ export async function saveItemAction(_prev: ItemFormState, formData: FormData): 
     sku: str(formData, "sku"),
     unitCost: str(formData, "unitCost"),
     fulfillmentNote: str(formData, "fulfillmentNote"),
-    optionLabel: str(formData, "optionLabel"),
-    optionValues: str(formData, "optionValues"),
+    option1Label: str(formData, "option1Label"),
+    option1Values: str(formData, "option1Values"),
+    option2Label: str(formData, "option2Label"),
+    option2Values: str(formData, "option2Values"),
     imageUrl: str(formData, "imageUrl"),
     active: str(formData, "active"),
     removeImage: str(formData, "removeImage"),
@@ -60,8 +66,11 @@ export async function saveItemAction(_prev: ItemFormState, formData: FormData): 
 
   const unitCost = d.unitCost ? Number(d.unitCost.replace(/[^0-9.]/g, "")) : null;
   if (d.unitCost && (unitCost === null || !Number.isFinite(unitCost) || unitCost < 0)) return { error: "Unit cost must be a number." };
-  const optionValues = (d.optionValues ?? "").split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
-  if (optionValues.length > 0 && !d.optionLabel) return { error: "Give the option group a label (e.g. Size) or clear the option values." };
+  const option1Values = parseOptionValues(d.option1Values);
+  const option2Values = parseOptionValues(d.option2Values);
+  if (option1Values.length > 0 && !d.option1Label) return { error: "Give option group 1 a label (e.g. Color) or clear its values." };
+  if (option2Values.length > 0 && !d.option2Label) return { error: "Give option group 2 a label (e.g. Size) or clear its values." };
+  if (option2Values.length > 0 && option1Values.length === 0) return { error: "Fill option group 1 before option group 2." };
   if (d.imageUrl && !/^https?:\/\//i.test(d.imageUrl)) return { error: "Image URL must start with http:// or https://" };
 
   let productUrl = d.productUrl || null;
@@ -98,8 +107,10 @@ export async function saveItemAction(_prev: ItemFormState, formData: FormData): 
     sku: d.sku || null,
     unitCost,
     fulfillmentNote: d.fulfillmentNote || null,
-    optionLabel: optionValues.length > 0 ? d.optionLabel || null : null,
-    optionValues,
+    option1Label: option1Values.length > 0 ? d.option1Label || null : null,
+    option1Values,
+    option2Label: option2Values.length > 0 ? d.option2Label || null : null,
+    option2Values,
     imageUrl: d.imageUrl || null,
     active: d.active === "on" || d.active === "1",
     ...(imageId !== undefined ? { imageId } : {}),
@@ -153,4 +164,98 @@ export async function lookupAmazonAction(url: string): Promise<AmazonLookup> {
     return { ok: true, asin, url: canonical, message: `Found ASIN ${asin}. Amazon didn't share product details automatically, so please type the name and price and upload a photo.` };
   }
   return { ok: true, asin, url: canonical, title: meta.title, imageUrl: meta.imageUrl, price: meta.price, description: meta.description, message: `Found ASIN ${asin} and prefilled the details from Amazon. Please double-check them.` };
+}
+
+// ---------- spreadsheet import ----------
+
+export type ImportItemsState = { error?: string; summary?: { created: number; updated: number; skipped: number; imagesStored: number; errors: string[] } } | null;
+
+async function fetchImage(url: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; GiftPortal/1.0)" } });
+    if (!res.ok) return null;
+    const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+    if (!mime.startsWith("image/")) return null;
+    const length = Number(res.headers.get("content-length") ?? 0);
+    if (length > MAX_UPLOAD_BYTES) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.byteLength > MAX_UPLOAD_BYTES) return null;
+    return { buffer, mime };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function importItemsAction(_prev: ImportItemsState, formData: FormData): Promise<ImportItemsState> {
+  const admin = await requireAdmin();
+  const file = formData.get("file");
+  const downloadImages = formData.get("downloadImages") === "on";
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a spreadsheet first." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File is too large (max 10 MB)." };
+  const parsed = await parseItemFile(Buffer.from(await file.arrayBuffer()), file.name);
+  if (parsed.rows.length === 0) return { error: parsed.errors[0] ?? "No gift rows found." };
+
+  let created = 0;
+  let updated = 0;
+  let imagesStored = 0;
+  const errors = [...parsed.errors];
+  for (const row of parsed.rows) {
+    const existing =
+      row.matchBy.kind === "asin"
+        ? await db.item.findFirst({ where: { asin: row.matchBy.value } })
+        : row.matchBy.kind === "sku"
+          ? await db.item.findFirst({ where: { sku: row.matchBy.value } })
+          : await db.item.findFirst({ where: { name: { equals: row.name, mode: "insensitive" } } });
+
+    let imageId: string | undefined;
+    if (downloadImages && row.imageUrl && (!existing || !existing.imageId)) {
+      const fetched = await fetchImage(row.imageUrl);
+      if (fetched) {
+        try {
+          const processed = await processImage(fetched.buffer, fetched.mime);
+          imageId = (await db.image.create({ data: processed })).id;
+          imagesStored += 1;
+        } catch {
+          errors.push(`Row ${row.rowNumber}: could not process the image at ${row.imageUrl}; kept as a link.`);
+        }
+      } else {
+        errors.push(`Row ${row.rowNumber}: could not download ${row.imageUrl}; kept as a link.`);
+      }
+    }
+
+    const data = {
+      type: row.type,
+      name: row.name,
+      nameEs: row.nameEs,
+      description: row.description,
+      descriptionEs: row.descriptionEs,
+      category: row.category,
+      productUrl: row.productUrl,
+      asin: row.asin,
+      sku: row.sku,
+      unitCost: row.unitCost,
+      fulfillmentNote: row.fulfillmentNote,
+      option1Label: row.option1Label,
+      option1Values: row.option1Values,
+      option2Label: row.option2Label,
+      option2Values: row.option2Values,
+      imageUrl: row.imageUrl,
+      active: row.active,
+      ...(imageId ? { imageId } : {}),
+    };
+    if (existing) {
+      await db.item.update({ where: { id: existing.id }, data });
+      updated += 1;
+    } else {
+      await db.item.create({ data });
+      created += 1;
+    }
+  }
+  await audit({ actorType: "ADMIN", actorId: admin.id, action: "items.imported", entityType: "Item", entityId: "bulk", meta: { file: file.name, created, updated, skipped: parsed.skipped, imagesStored } });
+  revalidatePath("/admin/items");
+  return { summary: { created, updated, skipped: parsed.skipped, imagesStored, errors: errors.slice(0, 20) } };
 }

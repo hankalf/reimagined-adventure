@@ -59,8 +59,10 @@ try {
   await a.fill("#nameEs", `Taza E2E ${run}`);
   await a.fill("#description", "A test mug.");
   await a.fill("#unitCost", "20");
-  await a.fill("#optionLabel", "Color");
-  await a.fill("#optionValues", "Red, Blue");
+  await a.fill("#option1Label", "Color");
+  await a.fill("#option1Values", "Red, Blue, Green");
+  await a.fill("#option2Label", "Size");
+  await a.fill("#option2Values", "11oz, 15oz");
   await a.setInputFiles("#image", pngPath);
   await a.click('button:has-text("Create gift")');
   await a.waitForURL(/\/admin\/items\?saved=/);
@@ -97,10 +99,14 @@ try {
   for (const label of [`E2E Mug ${run}`, `E2E Extra PTO ${run}`, "Company Hoodie", "Premium Wireless Headphones"]) {
     await a.locator("label", { hasText: label }).locator('input[name=itemIds]').check();
   }
+  await a.locator('input[name^="enabled1:"][value="Green"]').uncheck();
   await a.click('button:has-text("Add selected gifts")');
   await a.waitForLoadState("networkidle");
   assert((await a.locator("h2", { hasText: "Gifts shown to employees (4)" }).count()) === 1, "4 gifts shown");
-  ok("4 gifts added to the campaign");
+  const mugRowOpts = a.locator("tr", { hasText: `E2E Mug ${run}` });
+  assert(!(await mugRowOpts.locator('input[name="enabled1"][value="Green"]').isChecked()), "Green is not offered in this campaign");
+  assert(await mugRowOpts.locator('input[name="enabled1"][value="Red"]').isChecked(), "Red is offered");
+  ok("4 gifts added; mug offered in Red and Blue only (Green unticked at add time)");
   await shot(a, "gifts-shown");
 
   section("Upload the campaign employee list (CSV with a budget tier)");
@@ -152,11 +158,15 @@ try {
   assert((await e.locator("text=Taza E2E").count()) >= 1, "Spanish item name shown");
   await e.locator("li", { hasText: "Sudadera con capucha" }).locator("button").first().click();
   await e.waitForSelector('[role=dialog]');
-  await e.selectOption("#optionValue", "M");
+  const chooseBtnM = e.locator('[role=dialog] button:has-text("Elegir este regalo")');
+  assert(await chooseBtnM.isDisabled(), "choose button disabled until a size is picked");
+  await e.locator('[role=dialog] label', { hasText: /^M$/ }).click();
   await e.click('button:has-text("Elegir este regalo")');
+  await e.waitForSelector("text=/Sudadera con capucha de la empresa \\(M\\)/");
   await e.click('button:has-text("Sí, confirmar")');
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   await e.waitForSelector("text=Código de confirmación");
+  await e.waitForSelector("text=Size: M");
   const code = (await e.locator("dd.font-mono").first().textContent()).trim();
   assert(/^[A-Z2-9]{6}$/.test(code), `confirmation code looks right (${code})`);
   ok(`hoodie size M confirmed; code ${code}`);
@@ -184,12 +194,39 @@ try {
   section("Change gift to the mug (allowed until ordered)");
   await e.locator("li", { hasText: "Taza E2E" }).locator("button").first().click();
   await e.waitForSelector('[role=dialog]');
-  await e.selectOption("#optionValue", "Red");
+  assert((await e.locator('[role=dialog] label', { hasText: /^Green$/ }).count()) === 0, "Green is hidden from employees in this campaign");
+  assert((await e.locator('[role=dialog] label', { hasText: /^Blue$/ }).count()) === 1, "Blue is offered");
+  await e.locator('[role=dialog] label', { hasText: /^Red$/ }).click();
+  await e.locator('[role=dialog] label', { hasText: /^15oz$/ }).click();
   await e.click('button:has-text("Elegir este regalo")');
   await e.click('button:has-text("Sí, confirmar")');
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   await e.waitForSelector(`text=Taza E2E ${run}`);
-  ok("selection changed to the mug (Red)");
+  await e.waitForSelector("text=Color: Red, Size: 15oz");
+  ok("selection changed to the mug (Red / 15oz); only offered colours were shown");
+
+  section("Admin stops offering Red -> employee must re-pick a colour");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/items`);
+  const mugOptRow = a.locator("tr", { hasText: `E2E Mug ${run}` });
+  assert((await mugOptRow.locator("label", { hasText: "Red" }).locator("text=(1)").count()) === 1, "row shows 1 pending pick on Red");
+  await mugOptRow.locator('input[name="enabled1"][value="Red"]').uncheck();
+  a.once("dialog", (d) => d.accept());
+  await mugOptRow.locator('button:has-text("Save")').click();
+  await a.waitForSelector("text=/1 employee\\(s\\) who chose a value you removed/");
+  ok("Red removed from the campaign; admin warned about the pending pick");
+  await e.goto(`${BASE}/g/${SLUG}`);
+  await e.waitForURL(new RegExp(`/g/${SLUG}/pick`));
+  await e.waitForSelector("text=/Lo sentimos, tu regalo ya no está disponible/");
+  await e.locator("li", { hasText: "Taza E2E" }).locator("button").first().click();
+  await e.waitForSelector('[role=dialog]');
+  assert((await e.locator('[role=dialog] label', { hasText: /^Red$/ }).count()) === 0, "Red no longer offered");
+  await e.locator('[role=dialog] label', { hasText: /^Blue$/ }).click();
+  await e.locator('[role=dialog] label', { hasText: /^11oz$/ }).click();
+  await e.click('button:has-text("Elegir este regalo")');
+  await e.click('button:has-text("Sí, confirmar")');
+  await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
+  await e.waitForSelector("text=Color: Blue, Size: 11oz");
+  ok("employee re-picked the mug in Blue / 11oz");
 
   section("Admin marks the mug out of stock -> employee must re-pick");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/items`);
@@ -204,7 +241,7 @@ try {
   assert((await e.locator("li", { hasText: "Taza E2E" }).locator("text=Agotado").count()) === 1, "mug shows Sold out badge");
   await shot(e, "repick");
   await e.locator("li", { hasText: "Sudadera con capucha" }).locator("button").first().click();
-  await e.selectOption("#optionValue", "L");
+  await e.locator('[role=dialog] label', { hasText: /^L$/ }).click();
   await e.click('button:has-text("Elegir este regalo")');
   await e.click('button:has-text("Sí, confirmar")');
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
@@ -214,6 +251,7 @@ try {
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/orders`);
   const group = a.locator("tr", { hasText: "Company Hoodie" }).filter({ hasText: "Mark 1 ordered" });
   assert((await group.count()) === 1, "grouped row shows 1 hoodie to order");
+  assert((await group.locator("text=Size: L").count()) === 1, "grouped row shows the chosen size");
   assert((await a.locator("tr", { hasText: "Company Hoodie" }).first().locator('a:has-text("Open")').count()) === 1, "Amazon link present in grouped row");
   await group.locator('button:has-text("Mark 1 ordered")').click();
   await a.waitForSelector("text=Mark 1 received");
@@ -297,7 +335,7 @@ try {
   const summarySheet = wb.getWorksheet("Summary");
   let foundHoodie = false;
   summarySheet.eachRow((r) => {
-    if (String(r.getCell(1).value) === "Company Hoodie" && String(r.getCell(3).value) === "L") foundHoodie = true;
+    if (String(r.getCell(1).value) === "Company Hoodie" && String(r.getCell(3).value) === "Size: L") foundHoodie = true;
   });
   assert(foundHoodie, "Summary sheet has Company Hoodie / L row");
   const notPicked = wb.getWorksheet("Not picked");
@@ -324,6 +362,42 @@ try {
   const cron = await a.request.get(`${BASE}/api/cron/digest`, { headers: { authorization: `Bearer ${CRON_SECRET}` } });
   assert(cron.ok(), "digest runs with the secret");
   ok(`digest endpoint ok: ${JSON.stringify((await cron.json()).results.length)} campaign(s) considered`);
+
+  section("Catalog import: download the template, add a row, upload it back");
+  const tplRes = await a.request.get(`${BASE}/api/items/template?format=xlsx`);
+  assert(tplRes.ok() && (tplRes.headers()["content-type"] ?? "").includes("spreadsheetml"), "xlsx template downloads");
+  const tplCsv = await a.request.get(`${BASE}/api/items/template?format=csv`);
+  assert(tplCsv.ok() && (await tplCsv.text()).startsWith("name,"), "csv template downloads");
+  const tpl = new ExcelJS.Workbook();
+  await tpl.xlsx.load(await tplRes.body());
+  const giftsSheet = tpl.getWorksheet("Gifts");
+  assert(giftsSheet && tpl.getWorksheet("Instructions"), "template has Gifts and Instructions sheets");
+  const headerRow = giftsSheet.getRow(1).values.slice(1).map(String);
+  const col = (name) => headerRow.indexOf(name) + 1;
+  const newRow = giftsSheet.addRow([]);
+  newRow.getCell(col("name")).value = `E2E Imported Tumbler ${run}`;
+  newRow.getCell(col("amazon_url")).value = "https://www.amazon.com/Some-Tumbler/dp/B0IMPORT12/ref=abc";
+  newRow.getCell(col("unit_cost")).value = "$25.50";
+  newRow.getCell(col("colors")).value = "Teal | Rose";
+  newRow.getCell(col("sizes")).value = "20oz, 30oz";
+  newRow.getCell(col("category")).value = "Home";
+  const uploadPath = path.join(SHOTS, "gifts-upload.xlsx");
+  fs.writeFileSync(uploadPath, Buffer.from(await tpl.xlsx.writeBuffer()));
+  await a.goto(`${BASE}/admin/items?import=1`);
+  await a.setInputFiles("#items-file", uploadPath);
+  await a.uncheck('input[name="downloadImages"]');
+  await a.click('button:has-text("Import gifts")');
+  await a.waitForSelector("text=/Imported: /");
+  const importMsg = await a.locator("text=/Imported: /").innerText();
+  assert(/Imported: 2 new, 1 updated/.test(importMsg), `template examples upsert (earbuds matched by ASIN) and the new row is created (${importMsg})`);
+  await a.goto(`${BASE}/admin/items?q=${encodeURIComponent(`E2E Imported Tumbler ${run}`)}`);
+  const importedRow = a.locator("tr", { hasText: `E2E Imported Tumbler ${run}` });
+  assert((await importedRow.count()) === 1, "imported gift listed");
+  assert((await importedRow.locator("text=ASIN B0IMPORT12").count()) === 1, "ASIN extracted from the Amazon link");
+  assert((await importedRow.locator("text=Color: Teal, Rose").count()) === 1 && (await importedRow.locator("text=Size: 20oz, 30oz").count()) === 1, "colors and sizes shortcut columns became option groups");
+  assert((await importedRow.locator("text=$25.50").count()) === 1, "unit cost parsed");
+  ok("spreadsheet import works end to end");
+  await shot(a, "catalog-import");
 
   section("Admin users: add an HR user, set password via link, role gate, delete");
   await a.goto(`${BASE}/admin/settings/users`);

@@ -4,6 +4,8 @@ import { EmptyState, PageHeader } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { imageSrc } from "@/lib/image-src";
 import { dec, money } from "@/lib/utils";
+import { optionGroups } from "@/lib/options";
+import { ImportItemsForm } from "./import-form";
 
 export default async function ItemsPage({ searchParams }: PageProps<"/admin/items">) {
   const sp = await searchParams;
@@ -34,6 +36,23 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
           Saved “{sp.saved}”.
         </Alert>
       )}
+      <details className="card mb-4 p-4" open={sp.import === "1"}>
+        <summary className="cursor-pointer font-semibold">Import gifts from a spreadsheet</summary>
+        <p className="mt-1 text-xs text-slate-500">
+          Upload an Excel (.xlsx) or CSV file with one gift per row. Re-importing updates existing gifts (matched by ASIN, then SKU, then name) instead of creating duplicates.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <a href="/api/items/template?format=xlsx" className="btn-secondary btn-sm">
+            ⬇ Download Excel template
+          </a>
+          <a href="/api/items/template?format=csv" className="btn-secondary btn-sm">
+            ⬇ Download CSV template
+          </a>
+        </div>
+        <div className="mt-4">
+          <ImportItemsForm />
+        </div>
+      </details>
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} placeholder="Search name, category or ASIN" className="input sm:max-w-xs" />
         <select name="type" defaultValue={type ?? ""} className="input sm:max-w-[180px]">
@@ -92,7 +111,9 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
                     </td>
                     <td>{item.type === "CUSTOM" ? <span className="badge bg-emerald-100 text-emerald-800">Custom</span> : <span className="badge bg-slate-100 text-slate-700">Product</span>}</td>
                     <td className="text-slate-600">{item.category ?? "—"}</td>
-                    <td className="text-slate-600">{item.optionValues.length > 0 ? `${item.optionLabel}: ${item.optionValues.join(", ")}` : "—"}</td>
+                    <td className="text-slate-600">
+                      {optionGroups(item).length === 0 ? "—" : optionGroups(item).map((g) => <div key={g.index}>{`${g.label}: ${g.values.join(", ")}`}</div>)}
+                    </td>
                     <td className="text-right">{money(dec(item.unitCost))}</td>
                     <td className="text-slate-600">{item._count.campaigns}</td>
                     <td className="text-slate-600">{item._count.selections}</td>

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { StatusBadge } from "@/components/ui";
+import { Alert, StatusBadge } from "@/components/ui";
+import { offeredValues, optionGroups } from "@/lib/options";
+import { OptionsSaveButton } from "./options-save-button";
 import { db } from "@/lib/db";
 import { imageSrc } from "@/lib/image-src";
 import { COMMITTED_STATUSES } from "@/lib/budget";
@@ -7,14 +9,24 @@ import { dec, money } from "@/lib/utils";
 import { addCampaignItemsAction, moveCampaignItemAction, removeCampaignItemAction, toggleStockAction, updateCampaignItemAction } from "../../actions";
 import { OutOfStockButton } from "./stock-button";
 
-export default async function CampaignItemsPage({ params }: PageProps<"/admin/campaigns/[id]/items">) {
+export default async function CampaignItemsPage({ params, searchParams }: PageProps<"/admin/campaigns/[id]/items">) {
   const { id } = await params;
-  const [campaign, rows, catalog, taken] = await Promise.all([
+  const sp = await searchParams;
+  const [campaign, rows, catalog, taken, pending] = await Promise.all([
     db.campaign.findUniqueOrThrow({ where: { id } }),
     db.campaignItem.findMany({ where: { campaignId: id }, include: { item: true }, orderBy: [{ sortOrder: "asc" }, { item: { name: "asc" } }] }),
     db.item.findMany({ where: { active: true }, orderBy: [{ category: "asc" }, { name: "asc" }] }),
     db.selection.groupBy({ by: ["itemId", "status"], where: { campaignId: id }, _count: { _all: true } }),
+    db.selection.findMany({ where: { campaignId: id, status: "SELECTED" }, select: { itemId: true, option1Value: true, option2Value: true } }),
   ]);
+  // How many not-yet-ordered picks hold each option value, keyed "enabled1:<value>" / "enabled2:<value>" per item.
+  const chosenByItem = new Map<string, Record<string, number>>();
+  for (const p of pending) {
+    const rec = chosenByItem.get(p.itemId) ?? {};
+    if (p.option1Value) rec[`enabled1:${p.option1Value}`] = (rec[`enabled1:${p.option1Value}`] ?? 0) + 1;
+    if (p.option2Value) rec[`enabled2:${p.option2Value}`] = (rec[`enabled2:${p.option2Value}`] ?? 0) + 1;
+    chosenByItem.set(p.itemId, rec);
+  }
   const inCampaign = new Set(rows.map((r) => r.itemId));
   const available = catalog.filter((i) => !inCampaign.has(i.id));
   const committedBy = new Map<string, number>();
@@ -26,11 +38,16 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
 
   return (
     <div className="space-y-6">
+      {typeof sp.saved === "string" && <Alert kind="success">{sp.saved}</Alert>}
+      {typeof sp.error === "string" && <Alert kind="error">{sp.error}</Alert>}
       <section className="card overflow-x-auto">
         <div className="flex items-center justify-between p-4">
           <div>
             <h2 className="font-semibold">Gifts shown to employees ({rows.length})</h2>
-            <p className="text-xs text-slate-500">Order here is the order employees see. Set a stock limit to cap how many can choose an item; mark it out of stock to pull it immediately.</p>
+            <p className="text-xs text-slate-500">
+              Order here is the order employees see. Set a stock limit to cap how many can choose an item; mark it out of stock to pull it immediately. Untick a colour or size to stop offering
+              it in this campaign.
+            </p>
           </div>
           <Link href="/admin/items/new" className="btn-secondary btn-sm">
             + New catalog gift
@@ -42,8 +59,7 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
               <th>Order</th>
               <th>Gift</th>
               <th>Chosen</th>
-              <th>Stock limit</th>
-              <th>Cost override</th>
+              <th>Limit · cost · offered options</th>
               <th>Status</th>
               <th className="text-right">Actions</th>
             </tr>
@@ -96,10 +112,7 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
                         <Link href={`/admin/items/${r.itemId}`} className="font-medium text-slate-900 hover:underline">
                           {r.item.name}
                         </Link>
-                        <div className="text-xs text-slate-500">
-                          {r.item.type === "CUSTOM" ? "Custom gift" : money(dec(r.item.unitCost), campaign.currency)}
-                          {r.item.optionValues.length > 0 && ` · ${r.item.optionLabel}: ${r.item.optionValues.join(", ")}`}
-                        </div>
+                        <div className="text-xs text-slate-500">{r.item.type === "CUSTOM" ? "Custom gift" : money(dec(r.item.unitCost), campaign.currency)}</div>
                       </div>
                     </div>
                   </td>
@@ -107,13 +120,38 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
                     <span className="font-semibold">{committed}</span>
                     {remaining !== null && <span className="text-xs text-slate-500"> · {remaining} left</span>}
                   </td>
-                  <td colSpan={2}>
-                    <form action={updateCampaignItemAction} className="flex items-center gap-2">
+                  <td>
+                    <form action={updateCampaignItemAction} className="space-y-2">
                       <input type="hidden" name="campaignId" value={id} />
                       <input type="hidden" name="itemId" value={r.itemId} />
-                      <input name="stockLimit" defaultValue={r.stockLimit ?? ""} placeholder="∞" className="input w-20" inputMode="numeric" aria-label="Stock limit" />
-                      <input name="unitCostOverride" defaultValue={dec(r.unitCostOverride) ?? ""} placeholder={dec(r.item.unitCost)?.toString() ?? "cost"} className="input w-24" inputMode="decimal" aria-label="Cost override" />
-                      <button className="btn-ghost btn-sm">Save</button>
+                      <input type="hidden" name="hasOptions" value={optionGroups(r.item).length > 0 ? "1" : "0"} />
+                      <div className="flex items-center gap-2">
+                        <input name="stockLimit" defaultValue={r.stockLimit ?? ""} placeholder="∞" className="input w-20" inputMode="numeric" aria-label="Stock limit" title="Stock limit" />
+                        <input name="unitCostOverride" defaultValue={dec(r.unitCostOverride) ?? ""} placeholder={dec(r.item.unitCost)?.toString() ?? "cost"} className="input w-24" inputMode="decimal" aria-label="Cost override" title="Cost override" />
+                        <OptionsSaveButton chosenCounts={chosenByItem.get(r.itemId) ?? {}} />
+                      </div>
+                      {optionGroups(r.item).map((g) => {
+                        const offered = new Set(offeredValues(g.values, g.index === 1 ? r.enabledOption1Values : r.enabledOption2Values));
+                        const counts = chosenByItem.get(r.itemId) ?? {};
+                        return (
+                          <fieldset key={g.index} className="text-xs">
+                            <legend className="font-medium text-slate-600">{g.label}</legend>
+                            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                              {g.values.map((v) => {
+                                const on = offered.has(v);
+                                const chosen = counts[`enabled${g.index}:${v}`] ?? 0;
+                                return (
+                                  <label key={v} className={`flex items-center gap-1 ${on ? "text-slate-800" : "text-slate-400 line-through"}`}>
+                                    <input type="checkbox" name={`enabled${g.index}`} value={v} defaultChecked={on} data-initial={on ? "1" : "0"} className="h-3.5 w-3.5" />
+                                    {v}
+                                    {chosen > 0 && <span className="text-slate-400 no-underline">({chosen})</span>}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+                        );
+                      })}
                     </form>
                   </td>
                   <td>
@@ -143,6 +181,7 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
 
       <section className="card p-4">
         <h2 className="font-semibold">Add from the catalog</h2>
+        <p className="text-xs text-slate-500">Tick the gifts to add. For gifts with colours or sizes, untick any values you don&apos;t want to offer in this campaign.</p>
         {available.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
             Every active catalog gift is already in this campaign.{" "}
@@ -158,8 +197,8 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
               {available.map((item) => {
                 const src = imageSrc(item, true);
                 return (
-                  <li key={item.id}>
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-2 hover:bg-slate-50">
+                  <li key={item.id} className="rounded-lg border border-slate-200 hover:bg-slate-50">
+                    <label className="flex cursor-pointer items-center gap-3 p-2">
                       <input type="checkbox" name="itemIds" value={item.id} className="h-4 w-4" />
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-slate-100">
                         {src ? (
@@ -176,6 +215,21 @@ export default async function CampaignItemsPage({ params }: PageProps<"/admin/ca
                         </div>
                       </div>
                     </label>
+                    {optionGroups(item).length > 0 && (
+                      <div className="space-y-1 border-t border-slate-100 px-2 pb-2 pt-1 text-xs">
+                        {optionGroups(item).map((g) => (
+                          <div key={g.index} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="font-medium text-slate-600">{g.label}:</span>
+                            {g.values.map((v) => (
+                              <label key={v} className="flex items-center gap-1 text-slate-700">
+                                <input type="checkbox" name={`enabled${g.index}:${item.id}`} value={v} defaultChecked className="h-3.5 w-3.5" />
+                                {v}
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </li>
                 );
               })}

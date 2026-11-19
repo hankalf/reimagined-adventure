@@ -4,6 +4,7 @@ import { Stat } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
 import { money } from "@/lib/utils";
+import { offeredGroups } from "@/lib/options";
 import { ImportForm } from "@/app/admin/(app)/employees/import-form";
 import { removeEligibleEmployeeAction, setEligibilityModeAction, updateBudgetOverrideAction } from "../../actions";
 import { AddEligibleForm, PickOnBehalfForm } from "./forms";
@@ -30,7 +31,7 @@ export default async function CampaignEmployeesPage({ params, searchParams }: Pa
   if (q) rows = rows.filter((r) => `${r.employeeNumber} ${r.firstName} ${r.lastName} ${r.department ?? ""}`.toLowerCase().includes(q));
 
   const base = `/admin/campaigns/${id}/employees`;
-  const pickItems = items.map((ci) => ({ id: ci.itemId, name: ci.item.name, optionLabel: ci.item.optionLabel, optionValues: ci.item.optionValues, outOfStock: ci.status === "OUT_OF_STOCK" }));
+  const pickItems = items.map((ci) => ({ id: ci.itemId, name: ci.item.name, groups: offeredGroups(ci.item, ci), outOfStock: ci.status === "OUT_OF_STOCK" }));
   const pickEmployees = data.employeeBudgets.map((r) => ({ id: employeesByNumber.get(r.employeeNumber) ?? "", label: `${r.employeeNumber} — ${r.firstName} ${r.lastName}` })).filter((e) => e.id);
 
   return (
@@ -142,7 +143,7 @@ export default async function CampaignEmployeesPage({ params, searchParams }: Pa
                   {r.detail ? (
                     <>
                       {r.detail.itemName}
-                      {r.detail.optionValue && <span className="text-slate-500"> · {r.detail.optionValue}</span>}
+                      {r.detail.optionText && <span className="text-slate-500"> · {r.detail.optionText}</span>}
                       <div className="text-xs text-slate-500">
                         {money(r.detail.cost, campaign.currency)} · code {r.detail.confirmationCode}
                       </div>

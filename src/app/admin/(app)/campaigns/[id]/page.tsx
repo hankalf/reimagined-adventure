@@ -51,10 +51,10 @@ export default async function CampaignOverviewPage({ params }: PageProps<"/admin
           ) : (
             <ul className="divide-y divide-slate-100 text-sm">
               {data.summary.slice(0, 6).map((r) => (
-                <li key={`${r.itemId}-${r.optionValue}`} className="flex justify-between py-1.5">
+                <li key={`${r.itemId}-${r.option1Value}-${r.option2Value}`} className="flex justify-between py-1.5">
                   <span>
                     {r.name}
-                    {r.optionValue && <span className="text-slate-500"> · {r.optionValue}</span>}
+                    {r.optionText && <span className="text-slate-500"> · {r.optionText}</span>}
                   </span>
                   <span className="font-semibold">{r.quantity}</span>
                 </li>

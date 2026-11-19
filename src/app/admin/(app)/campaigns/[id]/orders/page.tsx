@@ -22,7 +22,7 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
     department: r.department,
     itemName: r.itemName,
     itemType: r.itemType,
-    optionValue: r.optionValue,
+    optionText: r.optionText,
     cost: r.cost,
     status: r.status,
     code: r.confirmationCode,
@@ -61,7 +61,7 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
           <thead>
             <tr>
               <th>Gift</th>
-              <th>Option</th>
+              <th>Options</th>
               <th className="text-right">Qty</th>
               <th className="text-right">Unit cost</th>
               <th className="text-right">Subtotal</th>
@@ -79,13 +79,13 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
               </tr>
             )}
             {data.summary.map((r) => (
-              <tr key={`${r.itemId}-${r.optionValue}`} className={r.type === "CUSTOM" ? "bg-emerald-50/40" : ""}>
+              <tr key={`${r.itemId}-${r.option1Value}-${r.option2Value}`} className={r.type === "CUSTOM" ? "bg-emerald-50/40" : ""}>
                 <td>
                   <div className="font-medium">{r.name}</div>
                   {r.type === "CUSTOM" && <div className="text-xs text-emerald-800">Custom gift{r.fulfillmentNote ? ` · ${r.fulfillmentNote}` : ""}</div>}
                   {r.asin && <div className="text-xs text-slate-500">ASIN {r.asin}</div>}
                 </td>
-                <td>{r.optionValue ?? "—"}</td>
+                <td>{r.optionDetail || "—"}</td>
                 <td className="text-right font-semibold">{r.quantity}</td>
                 <td className="text-right">{money(r.unitCost, campaign.currency)}</td>
                 <td className="text-right">{money(r.subtotal, campaign.currency)}</td>
@@ -108,7 +108,8 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
                       <form action={bulkItemStatusAction}>
                         <input type="hidden" name="campaignId" value={id} />
                         <input type="hidden" name="itemId" value={r.itemId} />
-                        <input type="hidden" name="optionValue" value={r.optionValue ?? ""} />
+                        <input type="hidden" name="option1Value" value={r.option1Value ?? ""} />
+                        <input type="hidden" name="option2Value" value={r.option2Value ?? ""} />
                         <input type="hidden" name="fromStatus" value="SELECTED" />
                         <input type="hidden" name="toStatus" value="ORDERED" />
                         <button className="btn-primary btn-sm">Mark {r.byStatus.SELECTED} ordered</button>
@@ -118,7 +119,8 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
                       <form action={bulkItemStatusAction}>
                         <input type="hidden" name="campaignId" value={id} />
                         <input type="hidden" name="itemId" value={r.itemId} />
-                        <input type="hidden" name="optionValue" value={r.optionValue ?? ""} />
+                        <input type="hidden" name="option1Value" value={r.option1Value ?? ""} />
+                        <input type="hidden" name="option2Value" value={r.option2Value ?? ""} />
                         <input type="hidden" name="fromStatus" value="ORDERED" />
                         <input type="hidden" name="toStatus" value="RECEIVED" />
                         <button className="btn-secondary btn-sm">Mark {r.byStatus.ORDERED} received</button>

@@ -12,7 +12,7 @@ export type OrderRow = {
   department: string | null;
   itemName: string;
   itemType: "PRODUCT" | "CUSTOM";
-  optionValue: string | null;
+  optionText: string;
   cost: number | null;
   status: string;
   code: string;
@@ -97,7 +97,7 @@ export function OrdersTable({ campaignId, rows, currency, returnTo }: { campaign
                   <td>
                     <div>
                       {r.itemName}
-                      {r.optionValue && <span className="text-slate-500"> · {r.optionValue}</span>}
+                      {r.optionText && <span className="text-slate-500"> · {r.optionText}</span>}
                     </div>
                     <div className="text-xs">
                       {r.itemType === "CUSTOM" && <span className="text-emerald-800">Custom · </span>}

@@ -223,7 +223,7 @@ export function KioskClient({ campaign, initialStats }: Props) {
             </h2>
             <p className="mt-1 text-lg text-emerald-100">
               {view.selection.itemName}
-              {view.selection.optionValue && ` · ${view.selection.optionValue}`}
+              {view.selection.optionText && ` · ${view.selection.optionText}`}
             </p>
             <div className="mt-5 flex gap-2">
               <button onClick={reset} autoFocus className="rounded-xl bg-white px-5 py-3 text-base font-semibold text-emerald-700 hover:bg-emerald-50">
@@ -307,10 +307,10 @@ function ResultCard({ selection, pending, onCollect, onUndo, onCancel }: { selec
           </p>
           <p className="mt-3 text-xl text-white">
             {selection.itemName}
-            {selection.optionValue && (
+            {selection.optionDetail && (
               <span className="text-slate-300">
                 {" "}
-                · {selection.optionLabel}: <strong className="text-white">{selection.optionValue}</strong>
+                · <strong className="text-white">{selection.optionDetail}</strong>
               </span>
             )}
           </p>

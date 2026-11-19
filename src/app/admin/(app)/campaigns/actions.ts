@@ -8,7 +8,8 @@ import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { sendHrOrderEmail } from "@/lib/hr-email";
 import { processImage } from "@/lib/images";
-import { resetSelection, setCampaignItemStock, submitSelection, updateSelectionStatuses } from "@/lib/selection";
+import { resetSelection, setCampaignItemOptions, setCampaignItemStock, submitSelection, updateSelectionStatuses } from "@/lib/selection";
+import { optionGroups } from "@/lib/options";
 import { isHexColor, parseEmails, slugify } from "@/lib/utils";
 import { randomBytes } from "node:crypto";
 
@@ -198,6 +199,13 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
 
 // ---------- gifts shown ----------
 
+/** Checkbox values for a group, reduced to [] (= all) when every catalog value is ticked or nothing is ticked. */
+function enabledSubset(formData: FormData, field: string, catalogValues: string[]): string[] {
+  const ticked = new Set(formData.getAll(field).map(String));
+  const kept = catalogValues.filter((v) => ticked.has(v));
+  return kept.length === 0 || kept.length === catalogValues.length ? [] : kept;
+}
+
 export async function addCampaignItemsAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
   const campaignId = s(formData, "campaignId");
@@ -205,8 +213,20 @@ export async function addCampaignItemsAction(formData: FormData): Promise<void> 
   if (!campaignId || itemIds.length === 0) return;
   const max = await db.campaignItem.aggregate({ where: { campaignId }, _max: { sortOrder: true } });
   let order = (max._max.sortOrder ?? -1) + 1;
+  const items = await db.item.findMany({ where: { id: { in: itemIds } } });
   for (const itemId of itemIds) {
-    await db.campaignItem.upsert({ where: { campaignId_itemId: { campaignId, itemId } }, update: {}, create: { campaignId, itemId, sortOrder: order } });
+    const item = items.find((i) => i.id === itemId);
+    if (!item) continue;
+    const groups = optionGroups(item);
+    const g1 = groups.find((g) => g.index === 1);
+    const g2 = groups.find((g) => g.index === 2);
+    const enabledOption1Values = g1 ? enabledSubset(formData, `enabled1:${itemId}`, g1.values) : [];
+    const enabledOption2Values = g2 ? enabledSubset(formData, `enabled2:${itemId}`, g2.values) : [];
+    await db.campaignItem.upsert({
+      where: { campaignId_itemId: { campaignId, itemId } },
+      update: {},
+      create: { campaignId, itemId, sortOrder: order, enabledOption1Values, enabledOption2Values },
+    });
     order += 1;
   }
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "campaign.items_added", entityType: "Campaign", entityId: campaignId, meta: { itemIds } });
@@ -229,7 +249,7 @@ export async function removeCampaignItemAction(formData: FormData): Promise<void
 }
 
 export async function updateCampaignItemAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const campaignId = s(formData, "campaignId");
   const itemId = s(formData, "itemId");
   const stockLimitRaw = s(formData, "stockLimit");
@@ -238,7 +258,21 @@ export async function updateCampaignItemAction(formData: FormData): Promise<void
     where: { campaignId_itemId: { campaignId, itemId } },
     data: { stockLimit: stockLimit !== null && Number.isFinite(stockLimit) ? stockLimit : null, unitCostOverride: num(s(formData, "unitCostOverride")) },
   });
+  let notice = "Saved.";
+  if (formData.get("hasOptions") === "1") {
+    const result = await setCampaignItemOptions({
+      campaignId,
+      itemId,
+      enabledOption1Values: formData.getAll("enabled1").map(String),
+      enabledOption2Values: formData.getAll("enabled2").map(String),
+      adminId: admin.id,
+    });
+    revalidateCampaign(campaignId);
+    if (!result.ok) redirect(`/admin/campaigns/${campaignId}/items?error=${encodeURIComponent(result.error)}`);
+    if (result.affected > 0) notice = `Saved. ${result.affected} employee(s) who chose a value you removed will be asked to pick again.`;
+  }
   revalidateCampaign(campaignId);
+  redirect(`/admin/campaigns/${campaignId}/items?saved=${encodeURIComponent(notice)}`);
 }
 
 export async function moveCampaignItemAction(formData: FormData): Promise<void> {
@@ -344,11 +378,12 @@ export async function bulkItemStatusAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
   const campaignId = s(formData, "campaignId");
   const itemId = s(formData, "itemId");
-  const optionValue = s(formData, "optionValue");
+  const option1Value = s(formData, "option1Value") || null;
+  const option2Value = s(formData, "option2Value") || null;
   const from = statusSchema.safeParse(s(formData, "fromStatus"));
   const to = statusSchema.safeParse(s(formData, "toStatus"));
   if (!from.success || !to.success) return;
-  const rows = await db.selection.findMany({ where: { campaignId, itemId, status: from.data, optionValue: optionValue || null }, select: { id: true } });
+  const rows = await db.selection.findMany({ where: { campaignId, itemId, status: from.data, option1Value, option2Value }, select: { id: true } });
   await updateSelectionStatuses({ ids: rows.map((r) => r.id), status: to.data, adminId: admin.id });
   revalidateCampaign(campaignId);
 }
@@ -358,12 +393,13 @@ export async function pickOnBehalfAction(_prev: FormState, formData: FormData): 
   const campaignId = s(formData, "campaignId");
   const employeeId = s(formData, "employeeId");
   const itemId = s(formData, "itemId");
-  const optionValue = s(formData, "optionValue") || null;
+  const option1Value = s(formData, "option1Value") || null;
+  const option2Value = s(formData, "option2Value") || null;
   if (!employeeId || !itemId) return { error: "Choose an employee and a gift." };
   const existing = await db.selection.findUnique({ where: { campaignId_employeeId: { campaignId, employeeId } } });
   if (existing && existing.status !== "SELECTED" && existing.status !== "NEEDS_REPICK") return { error: "This employee's gift has already been ordered. Reset it first if you need to change it." };
   if (existing) await resetSelection(existing.id, admin.id);
-  const result = await submitSelection({ campaignId, employeeId, itemId, optionValue, lang: "en", onBehalfOfAdminId: admin.id });
+  const result = await submitSelection({ campaignId, employeeId, itemId, option1Value, option2Value, lang: "en", onBehalfOfAdminId: admin.id });
   revalidateCampaign(campaignId);
   if (!result.ok) return { error: `Could not record the pick (${result.error.replace(/_/g, " ")}).` };
   return { success: `Recorded. Confirmation code ${result.confirmationCode}.` };

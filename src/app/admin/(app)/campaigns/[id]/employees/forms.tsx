@@ -29,7 +29,7 @@ export function AddEligibleForm({ campaignId }: { campaignId: string }) {
   );
 }
 
-type PickItem = { id: string; name: string; optionLabel: string | null; optionValues: string[]; outOfStock: boolean };
+type PickItem = { id: string; name: string; groups: Array<{ index: 1 | 2; label: string; values: string[] }>; outOfStock: boolean };
 
 export function PickOnBehalfForm({ campaignId, employees, items }: { campaignId: string; employees: { id: string; label: string }[]; items: PickItem[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(pickOnBehalfAction, null);
@@ -69,21 +69,21 @@ export function PickOnBehalfForm({ campaignId, employees, items }: { campaignId:
             ))}
           </select>
         </div>
-        {item && item.optionValues.length > 0 && (
-          <div>
-            <label className="label" htmlFor="obo-option">
-              {item.optionLabel}
+        {item?.groups.map((g) => (
+          <div key={g.index}>
+            <label className="label" htmlFor={`obo-option${g.index}`}>
+              {g.label}
             </label>
-            <select id="obo-option" name="optionValue" className="input" required defaultValue="">
+            <select id={`obo-option${g.index}`} name={`option${g.index}Value`} className="input" required defaultValue="">
               <option value="">Choose…</option>
-              {item.optionValues.map((v) => (
+              {g.values.map((v) => (
                 <option key={v} value={v}>
                   {v}
                 </option>
               ))}
             </select>
           </div>
-        )}
+        ))}
       </div>
       <button disabled={pending} className="btn-primary btn-sm">
         {pending ? "Saving…" : "Record pick"}

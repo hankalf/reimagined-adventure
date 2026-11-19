@@ -49,7 +49,7 @@ export default async function BudgetPage({ params }: PageProps<"/admin/campaigns
           <thead>
             <tr>
               <th>Gift</th>
-              <th>Option</th>
+              <th>Options</th>
               <th className="text-right">Qty</th>
               <th className="text-right">Unit cost</th>
               <th className="text-right">Subtotal</th>
@@ -58,9 +58,9 @@ export default async function BudgetPage({ params }: PageProps<"/admin/campaigns
           </thead>
           <tbody>
             {data.summary.map((r) => (
-              <tr key={`${r.itemId}-${r.optionValue}`}>
+              <tr key={`${r.itemId}-${r.option1Value}-${r.option2Value}`}>
                 <td>{r.name}</td>
-                <td>{r.optionValue ?? "—"}</td>
+                <td>{r.optionText || "—"}</td>
                 <td className="text-right">{r.quantity}</td>
                 <td className="text-right">{money(r.unitCost, cur)}</td>
                 <td className="text-right font-medium">{money(r.subtotal, cur)}</td>

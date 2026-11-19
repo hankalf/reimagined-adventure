@@ -51,7 +51,8 @@ export type ChooseState = { error?: string } | null;
 const chooseSchema = z.object({
   slug: z.string().min(1),
   itemId: z.string().min(1),
-  optionValue: z.string().trim().max(80).optional().nullable(),
+  option1Value: z.string().trim().max(80).optional().nullable(),
+  option2Value: z.string().trim().max(80).optional().nullable(),
 });
 
 export async function chooseAction(_prev: ChooseState, formData: FormData): Promise<ChooseState> {
@@ -60,17 +61,18 @@ export async function chooseAction(_prev: ChooseState, formData: FormData): Prom
   const parsed = chooseSchema.safeParse({
     slug: formData.get("slug"),
     itemId: formData.get("itemId"),
-    optionValue: formData.get("optionValue") || null,
+    option1Value: formData.get("option1Value") || null,
+    option2Value: formData.get("option2Value") || null,
   });
   if (!parsed.success) return { error: t.errors.generic };
-  const { slug, itemId, optionValue } = parsed.data;
+  const { slug, itemId, option1Value, option2Value } = parsed.data;
 
   const campaign = await db.campaign.findUnique({ where: { slug } });
   if (!campaign) return { error: t.errors.generic };
   const session = await getEmployeeSession(campaign.id);
   if (!session) return { error: t.errors.sessionExpired };
 
-  const result = await submitSelection({ campaignId: campaign.id, employeeId: session.employeeId, itemId, optionValue: optionValue ?? null, lang });
+  const result = await submitSelection({ campaignId: campaign.id, employeeId: session.employeeId, itemId, option1Value: option1Value ?? null, option2Value: option2Value ?? null, lang });
   if (!result.ok) {
     switch (result.error) {
       case "already_picked":
@@ -83,7 +85,7 @@ export async function chooseAction(_prev: ChooseState, formData: FormData): Prom
         return { error: t.errors.overBudget };
       case "option_required":
       case "invalid_option":
-        return { error: t.pick.optionRequired.replace("{label}", "") };
+        return { error: t.errors.itemUnavailable };
       case "not_eligible":
         return { error: t.errors.notEligible };
       case "not_open":

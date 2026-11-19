@@ -17,8 +17,10 @@ export type ItemFormValues = {
   sku: string;
   unitCost: string;
   fulfillmentNote: string;
-  optionLabel: string;
-  optionValues: string;
+  option1Label: string;
+  option1Values: string;
+  option2Label: string;
+  option2Values: string;
   imageUrl: string;
   imageId: string | null;
   active: boolean;
@@ -152,19 +154,34 @@ export function ItemForm({ initial, categories }: { initial: ItemFormValues; cat
 
       <div className="card p-5">
         <h3 className="mb-3 font-semibold">Options (optional)</h3>
-        <p className="mb-3 text-xs text-slate-500">For sizes or colours. The employee must choose one value, and it is included in the order list.</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Up to two groups, e.g. Color and Size. The employee must choose one value per group; the values are included in the order list. When you add the gift to a
+          campaign you choose which of these values that campaign offers.
+        </p>
         <div className="grid gap-4 md:grid-cols-3">
           <div>
-            <label htmlFor="optionLabel" className="label">
-              Option label
+            <label htmlFor="option1Label" className="label">
+              Group 1 label
             </label>
-            <input id="optionLabel" name="optionLabel" defaultValue={initial.optionLabel} className="input" placeholder="Size" />
+            <input id="option1Label" name="option1Label" defaultValue={initial.option1Label} className="input" placeholder="Color" />
           </div>
           <div className="md:col-span-2">
-            <label htmlFor="optionValues" className="label">
-              Values (comma separated)
+            <label htmlFor="option1Values" className="label">
+              Group 1 values (comma separated)
             </label>
-            <input id="optionValues" name="optionValues" defaultValue={initial.optionValues} className="input" placeholder="S, M, L, XL, 2XL" />
+            <input id="option1Values" name="option1Values" defaultValue={initial.option1Values} className="input" placeholder="Black, Teal, Rose" />
+          </div>
+          <div>
+            <label htmlFor="option2Label" className="label">
+              Group 2 label
+            </label>
+            <input id="option2Label" name="option2Label" defaultValue={initial.option2Label} className="input" placeholder="Size" />
+          </div>
+          <div className="md:col-span-2">
+            <label htmlFor="option2Values" className="label">
+              Group 2 values (comma separated)
+            </label>
+            <input id="option2Values" name="option2Values" defaultValue={initial.option2Values} className="input" placeholder="S, M, L, XL, 2XL" />
           </div>
         </div>
       </div>

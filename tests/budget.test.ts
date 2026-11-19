@@ -40,13 +40,13 @@ describe("summarizeBudget", () => {
 describe("perItemSpend", () => {
   it("groups by item and option with quantities", () => {
     const rows = perItemSpend([
-      { status: "SELECTED", itemId: "a", optionValue: "M", costAtSelection: 55, item: { name: "Hoodie" } },
-      { status: "ORDERED", itemId: "a", optionValue: "M", costAtSelection: 55, item: { name: "Hoodie" } },
-      { status: "SELECTED", itemId: "a", optionValue: "L", costAtSelection: 55, item: { name: "Hoodie" } },
-      { status: "NEEDS_REPICK", itemId: "b", optionValue: null, costAtSelection: 10, item: { name: "Mug" } },
+      { status: "SELECTED", itemId: "a", option1Value: "Teal", option2Value: "M", costAtSelection: 55, item: { name: "Hoodie" } },
+      { status: "ORDERED", itemId: "a", option1Value: "Teal", option2Value: "M", costAtSelection: 55, item: { name: "Hoodie" } },
+      { status: "SELECTED", itemId: "a", option1Value: "Teal", option2Value: "L", costAtSelection: 55, item: { name: "Hoodie" } },
+      { status: "NEEDS_REPICK", itemId: "b", option1Value: null, option2Value: null, costAtSelection: 10, item: { name: "Mug" } },
     ]);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ name: "Hoodie", optionValue: "M", quantity: 2, subtotal: 110 });
-    expect(rows[1]).toMatchObject({ optionValue: "L", quantity: 1 });
+    expect(rows[0]).toMatchObject({ name: "Hoodie", optionText: "Teal / M", quantity: 2, subtotal: 110 });
+    expect(rows[1]).toMatchObject({ optionText: "Teal / L", quantity: 1 });
   });
 });

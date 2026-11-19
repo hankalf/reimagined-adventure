@@ -4,12 +4,18 @@ import { COMMITTED_STATUSES, employeeBudget, isOverBudget, summarizeBudget, type
 import { toCsv } from "./csv";
 import { escapeHtml, emailShell } from "./email";
 import { dec, money, fmtDate, SELECTION_STATUS_LABEL } from "./utils";
+import { optionDetail, optionKey, optionSummary } from "./options";
 
 export type ReportSummaryRow = {
   itemId: string;
   name: string;
   type: "PRODUCT" | "CUSTOM";
-  optionValue: string | null;
+  option1Value: string | null;
+  option2Value: string | null;
+  /** "Teal / M" */
+  optionText: string;
+  /** "Color: Teal, Size: M" */
+  optionDetail: string;
   quantity: number;
   newQuantity: number;
   unitCost: number | null;
@@ -30,7 +36,10 @@ export type ReportDetailRow = {
   itemId: string;
   itemName: string;
   itemType: "PRODUCT" | "CUSTOM";
-  optionValue: string | null;
+  option1Value: string | null;
+  option2Value: string | null;
+  optionText: string;
+  optionDetail: string;
   cost: number | null;
   budget: number | null;
   overBudget: boolean;
@@ -124,7 +133,10 @@ export async function buildReportData(campaignId: string, opts: { since?: Date |
       itemId: s.itemId,
       itemName: s.item.name,
       itemType: s.item.type,
-      optionValue: s.optionValue,
+      option1Value: s.option1Value,
+      option2Value: s.option2Value,
+      optionText: optionSummary(s),
+      optionDetail: optionDetail(s.item, s),
       cost,
       budget,
       overBudget: isOverBudget(cost, budget),
@@ -143,7 +155,7 @@ export async function buildReportData(campaignId: string, opts: { since?: Date |
   const summaryMap = new Map<string, ReportSummaryRow>();
   for (const s of selections) {
     if (!COMMITTED_STATUSES.includes(s.status)) continue;
-    const key = `${s.itemId}::${s.optionValue ?? ""}`;
+    const key = optionKey(s.itemId, s);
     const cost = dec(s.costAtSelection);
     const row =
       summaryMap.get(key) ??
@@ -151,7 +163,10 @@ export async function buildReportData(campaignId: string, opts: { since?: Date |
         itemId: s.itemId,
         name: s.item.name,
         type: s.item.type,
-        optionValue: s.optionValue,
+        option1Value: s.option1Value,
+        option2Value: s.option2Value,
+        optionText: optionSummary(s),
+        optionDetail: optionDetail(s.item, s),
         quantity: 0,
         newQuantity: 0,
         unitCost: cost ?? dec(overrideByItem.get(s.itemId)?.unitCostOverride) ?? dec(s.item.unitCost),
@@ -236,9 +251,9 @@ export async function buildReportData(campaignId: string, opts: { since?: Date |
 export function summaryCsv(data: ReportData, onlyNew = false): string {
   const rows = data.summary.filter((r) => !onlyNew || r.newQuantity > 0);
   return toCsv([
-    ["Item", "Type", "Option", "Quantity", onlyNew ? "New since last email" : "New", "Unit cost", "Subtotal", "Amazon / product link", "ASIN", "SKU", "Fulfilment note", "To order", "Ordered", "Received", "Collected"],
+    ["Item", "Type", "Options", "Quantity", onlyNew ? "New since last email" : "New", "Unit cost", "Subtotal", "Amazon / product link", "ASIN", "SKU", "Fulfilment note", "To order", "Ordered", "Received", "Collected"],
     ...rows.map((r) => [
-      r.name, r.type === "CUSTOM" ? "Custom" : "Product", r.optionValue ?? "", onlyNew ? r.newQuantity : r.quantity, r.newQuantity, r.unitCost ?? "", r.subtotal ?? "", r.productUrl ?? "", r.asin ?? "", r.sku ?? "", r.fulfillmentNote ?? "",
+      r.name, r.type === "CUSTOM" ? "Custom" : "Product", r.optionDetail, onlyNew ? r.newQuantity : r.quantity, r.newQuantity, r.unitCost ?? "", r.subtotal ?? "", r.productUrl ?? "", r.asin ?? "", r.sku ?? "", r.fulfillmentNote ?? "",
       r.byStatus.SELECTED ?? 0, r.byStatus.ORDERED ?? 0, r.byStatus.RECEIVED ?? 0, r.byStatus.COLLECTED ?? 0,
     ]),
   ]);
@@ -247,9 +262,9 @@ export function summaryCsv(data: ReportData, onlyNew = false): string {
 export function detailCsv(data: ReportData, onlyNew = false): string {
   const rows = data.detail.filter((r) => !onlyNew || r.isNew);
   return toCsv([
-    ["Employee number", "First name", "Last name", "Department", "Gift", "Type", "Option", "Cost", "Budget", "Over budget", "Status", "Confirmation code", "Selected at", "Ordered at", "Received at", "Collected at", "Product link", "Language"],
+    ["Employee number", "First name", "Last name", "Department", "Gift", "Type", "Options", "Cost", "Budget", "Over budget", "Status", "Confirmation code", "Selected at", "Ordered at", "Received at", "Collected at", "Product link", "Language"],
     ...rows.map((r) => [
-      r.employeeNumber, r.firstName, r.lastName, r.department ?? "", r.itemName, r.itemType === "CUSTOM" ? "Custom" : "Product", r.optionValue ?? "", r.cost ?? "", r.budget ?? "", r.overBudget ? "Yes" : "", SELECTION_STATUS_LABEL[r.status] ?? r.status, r.confirmationCode,
+      r.employeeNumber, r.firstName, r.lastName, r.department ?? "", r.itemName, r.itemType === "CUSTOM" ? "Custom" : "Product", r.optionDetail, r.cost ?? "", r.budget ?? "", r.overBudget ? "Yes" : "", SELECTION_STATUS_LABEL[r.status] ?? r.status, r.confirmationCode,
       r.selectedAt.toISOString(), r.orderedAt?.toISOString() ?? "", r.receivedAt?.toISOString() ?? "", r.collectedAt?.toISOString() ?? "", r.productUrl ?? "", r.language,
     ]),
   ]);
@@ -307,10 +322,10 @@ ${[
 
   const productTable = products.length === 0
     ? `<p style="font-size:14px;color:#6b7280">No product orders${opts.onlyNew ? " since the last email" : ""}.</p>`
-    : `<table style="border-collapse:collapse;width:100%;margin-bottom:24px"><thead><tr>${th("Item")}${th("Option")}${th("Qty", "right")}${th("Unit cost", "right")}${th("Subtotal", "right")}${th("Link")}</tr></thead><tbody>
+    : `<table style="border-collapse:collapse;width:100%;margin-bottom:24px"><thead><tr>${th("Item")}${th("Options")}${th("Qty", "right")}${th("Unit cost", "right")}${th("Subtotal", "right")}${th("Link")}</tr></thead><tbody>
 ${products
   .map(
-    (r) => `<tr>${td(escapeHtml(r.name))}${td(escapeHtml(r.optionValue ?? "—"))}${td(qty(r), "right")}${td(money(r.unitCost, cur), "right")}${td(r.unitCost !== null ? money(r.unitCost * qty(r), cur) : "—", "right")}${td(r.productUrl ? `<a href="${escapeHtml(r.productUrl)}" style="color:#1d4ed8">Open${r.asin ? ` (${escapeHtml(r.asin)})` : ""}</a>` : "—")}</tr>`,
+    (r) => `<tr>${td(escapeHtml(r.name))}${td(escapeHtml(r.optionDetail || "—"))}${td(qty(r), "right")}${td(money(r.unitCost, cur), "right")}${td(r.unitCost !== null ? money(r.unitCost * qty(r), cur) : "—", "right")}${td(r.productUrl ? `<a href="${escapeHtml(r.productUrl)}" style="color:#1d4ed8">Open${r.asin ? ` (${escapeHtml(r.asin)})` : ""}</a>` : "—")}</tr>`,
   )
   .join("")}
 <tr>${td("<strong>Total</strong>")}${td("")}${td(`<strong>${products.reduce((a, r) => a + qty(r), 0)}</strong>`, "right")}${td("")}${td(`<strong>${money(products.reduce((a, r) => a + (r.unitCost ?? 0) * qty(r), 0), cur)}</strong>`, "right")}${td("")}</tr>
@@ -319,16 +334,16 @@ ${products
   const customTable = customs.length === 0
     ? ""
     : `<h2 style="font-size:16px;margin:8px 0 10px">Custom gifts to fulfil internally</h2>
-<table style="border-collapse:collapse;width:100%;margin-bottom:24px"><thead><tr>${th("Gift")}${th("Option")}${th("Qty", "right")}${th("Internal cost", "right")}${th("How to fulfil")}</tr></thead><tbody>
-${customs.map((r) => `<tr>${td(escapeHtml(r.name))}${td(escapeHtml(r.optionValue ?? "—"))}${td(qty(r), "right")}${td(money(r.unitCost, cur), "right")}${td(escapeHtml(r.fulfillmentNote ?? "—"))}</tr>`).join("")}
+<table style="border-collapse:collapse;width:100%;margin-bottom:24px"><thead><tr>${th("Gift")}${th("Options")}${th("Qty", "right")}${th("Internal cost", "right")}${th("How to fulfil")}</tr></thead><tbody>
+${customs.map((r) => `<tr>${td(escapeHtml(r.name))}${td(escapeHtml(r.optionDetail || "—"))}${td(qty(r), "right")}${td(money(r.unitCost, cur), "right")}${td(escapeHtml(r.fulfillmentNote ?? "—"))}</tr>`).join("")}
 </tbody></table>`;
 
   const detailRows = detail.slice(0, 400);
   const detailTable = `<h2 style="font-size:16px;margin:8px 0 10px">Per employee${opts.onlyNew ? " (new)" : ""}</h2>
-<table style="border-collapse:collapse;width:100%"><thead><tr>${th("Employee #")}${th("Name")}${th("Dept")}${th("Gift")}${th("Option")}${th("Cost", "right")}${th("Status")}${th("Code")}</tr></thead><tbody>
+<table style="border-collapse:collapse;width:100%"><thead><tr>${th("Employee #")}${th("Name")}${th("Dept")}${th("Gift")}${th("Options")}${th("Cost", "right")}${th("Status")}${th("Code")}</tr></thead><tbody>
 ${detailRows
   .map(
-    (r) => `<tr>${td(escapeHtml(r.employeeNumber))}${td(escapeHtml(`${r.firstName} ${r.lastName}`.trim()))}${td(escapeHtml(r.department ?? ""))}${td(escapeHtml(r.itemName))}${td(escapeHtml(r.optionValue ?? "—"))}${td(money(r.cost, cur), "right")}${td(SELECTION_STATUS_LABEL[r.status] ?? r.status)}${td(r.confirmationCode)}</tr>`,
+    (r) => `<tr>${td(escapeHtml(r.employeeNumber))}${td(escapeHtml(`${r.firstName} ${r.lastName}`.trim()))}${td(escapeHtml(r.department ?? ""))}${td(escapeHtml(r.itemName))}${td(escapeHtml(r.optionText || "—"))}${td(money(r.cost, cur), "right")}${td(SELECTION_STATUS_LABEL[r.status] ?? r.status)}${td(r.confirmationCode)}</tr>`,
   )
   .join("")}
 </tbody></table>

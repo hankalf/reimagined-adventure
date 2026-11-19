@@ -108,7 +108,6 @@ export function GiftGrid({ slug, lang, t, items, currency, currentItemId, allowC
           lang={lang}
           t={t}
           currency={currency}
-          isCurrent={currentItemId === open.id}
           allowChange={allowChange}
           onClose={() => setOpen(null)}
         />
@@ -123,7 +122,6 @@ function ItemDialog({
   lang,
   t,
   currency,
-  isCurrent,
   allowChange,
   onClose,
 }: {
@@ -132,18 +130,18 @@ function ItemDialog({
   lang: Lang;
   t: Dictionary;
   currency: string;
-  isCurrent: boolean;
   allowChange: boolean;
   onClose: () => void;
 }) {
-  const [option, setOption] = useState<string>(item.optionValues.length === 1 ? item.optionValues[0] : "");
+  const [choices, setChoices] = useState<Record<number, string>>(() => Object.fromEntries(item.groups.map((g) => [g.index, g.values.length === 1 ? g.values[0] : ""])));
   const [confirming, setConfirming] = useState(false);
   const [state, action, pending] = useActionState<ChooseState, FormData>(chooseAction, null);
   const name = localized(lang, item.name, item.nameEs);
   const description = localized(lang, item.description, item.descriptionEs);
   const src = imageSrc(item, false);
-  const needsOption = item.optionValues.length > 0;
-  const canChoose = item.available && !item.overBudget && (!isCurrent || true);
+  const allChosen = item.groups.every((g) => Boolean(choices[g.index]));
+  const chosenText = item.groups.map((g) => choices[g.index]).filter(Boolean).join(" / ");
+  const canChoose = item.available && !item.overBudget;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -202,22 +200,35 @@ function ItemDialog({
             <form action={action} className="mt-auto pt-5">
               <input type="hidden" name="slug" value={slug} />
               <input type="hidden" name="itemId" value={item.id} />
-              {needsOption && (
-                <div className="mb-4">
-                  <label htmlFor="optionValue" className="label">
-                    {fill(t.pick.chooseOption, { label: item.optionLabel ?? "" })}
-                  </label>
-                  <select id="optionValue" name="optionValue" value={option} onChange={(e) => setOption(e.target.value)} className="input" required>
-                    <option value="">—</option>
-                    {item.optionValues.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {!needsOption && <input type="hidden" name="optionValue" value="" />}
+              {item.groups.map((g) => (
+                <fieldset key={g.index} className="mb-4">
+                  <legend className="label">{fill(t.pick.chooseOption, { label: g.label })}</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {g.values.map((v) => {
+                      const selected = choices[g.index] === v;
+                      return (
+                        <label
+                          key={v}
+                          className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                            selected ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={`option${g.index}Value`}
+                            value={v}
+                            checked={selected}
+                            onChange={() => setChoices((c) => ({ ...c, [g.index]: v }))}
+                            className="sr-only"
+                            required
+                          />
+                          {v}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ))}
               {state?.error && (
                 <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                   {state.error}
@@ -227,7 +238,7 @@ function ItemDialog({
               {!confirming ? (
                 <button
                   type="button"
-                  disabled={!canChoose || (needsOption && !option)}
+                  disabled={!canChoose || !allChosen}
                   onClick={() => setConfirming(true)}
                   className="btn w-full bg-brand py-3 text-base text-white hover:opacity-90 focus:ring-blue-300"
                 >
@@ -237,7 +248,7 @@ function ItemDialog({
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <p className="font-semibold text-slate-900">{t.pick.confirmTitle}</p>
                   <p className="mt-1 text-sm text-slate-700">
-                    {fill(allowChange ? t.pick.confirmBody : t.pick.confirmBodyLocked, { item: option ? `${name} (${option})` : name })}
+                    {fill(allowChange ? t.pick.confirmBody : t.pick.confirmBodyLocked, { item: chosenText ? `${name} (${chosenText})` : name })}
                   </p>
                   <div className="mt-3 flex gap-2">
                     <button type="submit" disabled={pending} className="btn flex-1 bg-brand text-white hover:opacity-90 focus:ring-blue-300">

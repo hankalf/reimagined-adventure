@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { imageSrc } from "@/lib/image-src";
 import { getLang } from "@/lib/lang";
 import { qrDataUrl } from "@/lib/qr";
+import { optionDetail } from "@/lib/options";
 import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
 
@@ -51,11 +52,7 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
           <div className="sm:col-span-3">
             <p className="text-sm uppercase tracking-wide text-slate-500">{t.done.youChose}</p>
             <h2 className="text-xl font-semibold text-slate-900">{name}</h2>
-            {selection.optionValue && (
-              <p className="text-slate-700">
-                {selection.item.optionLabel}: <strong>{selection.optionValue}</strong>
-              </p>
-            )}
+            {(selection.option1Value || selection.option2Value) && <p className="text-slate-700">{optionDetail(selection.item, selection)}</p>}
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg bg-slate-50 p-3">
                 <dt className="text-slate-500">{t.done.confirmationCode}</dt>

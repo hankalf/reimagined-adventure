@@ -1,4 +1,5 @@
 /** Pure budget helpers shared by the employee page, admin Budget tab, HR email and Excel export. */
+import { optionKey, optionSummary } from "./options";
 
 export type SelectionStatusLike = "SELECTED" | "NEEDS_REPICK" | "ORDERED" | "RECEIVED" | "COLLECTED";
 
@@ -87,7 +88,8 @@ export function summarizeBudget(
 export type ItemSpendRow = {
   itemId: string;
   name: string;
-  optionValue: string | null;
+  /** Chosen option values, e.g. "Teal / M"; empty when the gift has no options. */
+  optionText: string;
   quantity: number;
   unitCost: number | null;
   subtotal: number | null;
@@ -98,7 +100,8 @@ export function perItemSpend(
   selections: Array<{
     status: SelectionStatusLike;
     itemId: string;
-    optionValue: string | null;
+    option1Value: string | null;
+    option2Value: string | null;
     costAtSelection: unknown;
     item: { name: string };
   }>,
@@ -106,12 +109,12 @@ export function perItemSpend(
   const map = new Map<string, ItemSpendRow>();
   for (const s of selections) {
     if (!COMMITTED_STATUSES.includes(s.status)) continue;
-    const key = `${s.itemId}::${s.optionValue ?? ""}`;
+    const key = optionKey(s.itemId, s);
     const cost = toNumber(s.costAtSelection);
     const row = map.get(key) ?? {
       itemId: s.itemId,
       name: s.item.name,
-      optionValue: s.optionValue ?? null,
+      optionText: optionSummary(s),
       quantity: 0,
       unitCost: cost,
       subtotal: 0,

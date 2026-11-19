@@ -6,11 +6,11 @@ import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sendHrOrderEmail } from "@/lib/hr-email";
 import { processImage } from "@/lib/images";
 import { resetSelection, setCampaignItemOptions, setCampaignItemStock, submitSelection, updateSelectionStatuses } from "@/lib/selection";
 import { optionGroups } from "@/lib/options";
-import { isHexColor, parseEmails, slugify } from "@/lib/utils";
+import { applyOrderPrice } from "@/lib/pricing";
+import { isHexColor, slugify } from "@/lib/utils";
 import { randomBytes } from "node:crypto";
 
 export type FormState = { error?: string; success?: string } | null;
@@ -39,7 +39,6 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
   if (!name) return { error: "Give the campaign a name." };
   let slug = slugify(s(formData, "slug") || name);
   if (await db.campaign.findUnique({ where: { slug } })) slug = `${slug}-${randomBytes(2).toString("hex")}`;
-  const defaultHr = (await db.setting.findUnique({ where: { key: "default_hr_emails" } }))?.value ?? "";
   const copyFromId = s(formData, "copyFrom");
   const source = copyFromId ? await db.campaign.findUnique({ where: { id: copyFromId }, include: { items: true } }) : null;
 
@@ -47,7 +46,6 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
     data: {
       name,
       slug,
-      hrEmails: parseEmails(s(formData, "hrEmails") || defaultHr),
       closesAt: date(s(formData, "closesAt")),
       defaultEmployeeBudget: num(s(formData, "defaultEmployeeBudget")),
       totalBudget: num(s(formData, "totalBudget")),
@@ -110,8 +108,8 @@ export async function updateCampaignSettingsAction(_prev: FormState, formData: F
       allowChangeUntilOrdered: formData.get("allowChangeUntilOrdered") === "on",
       showSoldOutItems: formData.get("showSoldOutItems") === "on",
       hideItemsOverBudget: formData.get("hideItemsOverBudget") === "on",
+      showBudgetToEmployees: formData.get("showBudgetToEmployees") === "on",
       allEmployeesEligible: formData.get("allEmployeesEligible") === "on",
-      hrEmails: parseEmails(s(formData, "hrEmails")),
       totalBudget: num(s(formData, "totalBudget")),
       defaultEmployeeBudget: num(s(formData, "defaultEmployeeBudget")),
     },
@@ -401,6 +399,33 @@ export async function bulkItemStatusAction(formData: FormData): Promise<void> {
   revalidateCampaign(campaignId);
 }
 
+/**
+ * Grouped order row: optionally confirm the real unit price (updates the gift everywhere and keeps history),
+ * then optionally mark that line's not-yet-ordered picks as ordered.
+ */
+export async function orderRowAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const campaignId = s(formData, "campaignId");
+  const itemId = s(formData, "itemId");
+  const option1Value = s(formData, "option1Value") || null;
+  const option2Value = s(formData, "option2Value") || null;
+  const intent = s(formData, "intent");
+  const price = num(s(formData, "unitCost"));
+  const notes: string[] = [];
+  if (price !== null && price >= 0) {
+    const res = await applyOrderPrice({ campaignId, itemId, newPrice: price, admin: { id: admin.id, name: admin.name } });
+    if (res.changed) notes.push(`Price updated ${res.oldPrice !== null ? `from ${res.oldPrice.toFixed(2)} ` : ""}to ${res.newPrice.toFixed(2)} for this gift everywhere (${res.selectionsUpdated} pick(s) here${res.otherCampaignsUpdated ? `, ${res.otherCampaignsUpdated} pending elsewhere` : ""}).`);
+  }
+  if (intent === "order") {
+    const rows = await db.selection.findMany({ where: { campaignId, itemId, status: "SELECTED", option1Value, option2Value }, select: { id: true } });
+    const n = await updateSelectionStatuses({ ids: rows.map((r) => r.id), status: "ORDERED", adminId: admin.id });
+    notes.push(`${n} marked ordered.`);
+  }
+  revalidateCampaign(campaignId);
+  revalidatePath("/admin/items");
+  redirect(`/admin/campaigns/${campaignId}/orders?saved=${encodeURIComponent(notes.join(" ") || "Nothing changed.")}`);
+}
+
 export async function pickOnBehalfAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const admin = await requireAdmin();
   const campaignId = s(formData, "campaignId");
@@ -418,29 +443,7 @@ export async function pickOnBehalfAction(_prev: FormState, formData: FormData): 
   return { success: `Recorded. Confirmation code ${result.confirmationCode}.` };
 }
 
-// ---------- emails & feed ----------
-
-export async function sendHrEmailAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
-  const campaignId = s(formData, "campaignId");
-  const mode = s(formData, "mode") === "new" ? "new" : "full";
-  const to = parseEmails(s(formData, "to"));
-  if (to.length === 0) return { error: "Enter at least one recipient email." };
-  if (formData.get("saveRecipients") === "on") await db.campaign.update({ where: { id: campaignId }, data: { hrEmails: to } });
-  const { log, data } = await sendHrOrderEmail({ campaignId, to, mode, actorId: admin.id, actorType: "ADMIN" });
-  revalidateCampaign(campaignId);
-  if (log.status === "FAILED") return { error: `Email failed: ${log.error ?? "unknown error"}. Check SMTP settings.` };
-  const rows = mode === "new" ? data.counts.newSinceLast : data.counts.picked;
-  return { success: log.status === "LOGGED" ? `Email recorded in the log (console mode: nothing was sent). ${rows} selection(s) included. Configure SMTP to send for real.` : `Email sent to ${to.join(", ")} with ${rows} selection(s) and the Excel workbook attached.` };
-}
-
-export async function toggleDigestAction(formData: FormData): Promise<void> {
-  await requireAdmin();
-  const id = s(formData, "id");
-  const enabled = s(formData, "enabled") === "1";
-  await db.campaign.update({ where: { id }, data: { digestEnabled: enabled } });
-  revalidateCampaign(id);
-}
+// ---------- live feed ----------
 
 export async function regenerateFeedTokenAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();

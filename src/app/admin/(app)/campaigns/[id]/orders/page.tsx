@@ -2,7 +2,8 @@ import { Stat } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
 import { money } from "@/lib/utils";
-import { bulkItemStatusAction } from "../../actions";
+import { bulkItemStatusAction, orderRowAction } from "../../actions";
+import { Alert } from "@/components/ui";
 import { OrdersTable, type OrderRow } from "./orders-table";
 
 export default async function OrdersPage({ params, searchParams }: PageProps<"/admin/campaigns/[id]/orders">) {
@@ -11,6 +12,7 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
   const status = typeof sp.status === "string" ? sp.status : "";
   const q = typeof sp.q === "string" ? sp.q.trim().toLowerCase() : "";
   const [campaign, data] = await Promise.all([db.campaign.findUniqueOrThrow({ where: { id } }), buildReportData(id)]);
+  const saved = typeof sp.saved === "string" ? sp.saved : null;
 
   let rows = data.detail;
   if (status) rows = rows.filter((r) => r.status === status);
@@ -34,6 +36,7 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
 
   return (
     <div className="space-y-6">
+      {saved && <Alert kind="success">{saved}</Alert>}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat label="To order" value={data.counts.toOrder} tone={data.counts.toOrder > 0 ? "warn" : "default"} />
         <Stat label="Ordered" value={data.counts.ordered} />
@@ -46,7 +49,10 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
         <div className="flex flex-wrap items-center justify-between gap-2 p-4">
           <div>
             <h2 className="font-semibold">Main order list (grouped by gift)</h2>
-            <p className="text-xs text-slate-500">Quantities HR needs to buy, with the Amazon link. “Mark all ordered” moves every not-yet-ordered pick for that line to Ordered.</p>
+            <p className="text-xs text-slate-500">
+              Quantities HR needs to buy, with the Amazon link. Type the price you actually paid before clicking “Mark ordered”: it updates the gift&apos;s price everywhere and is kept in the
+              gift&apos;s price history.
+            </p>
           </div>
           <div className="flex gap-2">
             <a href={`/api/export/${id}?type=xlsx`} className="btn-primary btn-sm">
@@ -63,11 +69,11 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
               <th>Gift</th>
               <th>Options</th>
               <th className="text-right">Qty</th>
-              <th className="text-right">Unit cost</th>
+              <th className="text-right">Unit cost (editable)</th>
               <th className="text-right">Subtotal</th>
               <th>Progress</th>
               <th>Link</th>
-              <th className="text-right">Bulk</th>
+              <th className="text-right">Order</th>
             </tr>
           </thead>
           <tbody>
@@ -87,7 +93,17 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
                 </td>
                 <td>{r.optionDetail || "—"}</td>
                 <td className="text-right font-semibold">{r.quantity}</td>
-                <td className="text-right">{money(r.unitCost, campaign.currency)}</td>
+                <td className="text-right">
+                  <input
+                    form={`order-row-${r.itemId}-${r.option1Value ?? ""}-${r.option2Value ?? ""}`}
+                    name="unitCost"
+                    defaultValue={r.unitCost ?? ""}
+                    inputMode="decimal"
+                    aria-label="Unit cost paid"
+                    title="Price actually paid; saving updates this gift everywhere"
+                    className="input w-24 text-right"
+                  />
+                </td>
                 <td className="text-right">{money(r.subtotal, campaign.currency)}</td>
                 <td className="text-xs text-slate-600">
                   <span className="text-blue-800">{r.byStatus.SELECTED ?? 0} to order</span> · <span className="text-violet-800">{r.byStatus.ORDERED ?? 0} ordered</span> ·{" "}
@@ -104,17 +120,20 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
                 </td>
                 <td>
                   <div className="flex justify-end gap-1">
-                    {(r.byStatus.SELECTED ?? 0) > 0 && (
-                      <form action={bulkItemStatusAction}>
-                        <input type="hidden" name="campaignId" value={id} />
-                        <input type="hidden" name="itemId" value={r.itemId} />
-                        <input type="hidden" name="option1Value" value={r.option1Value ?? ""} />
-                        <input type="hidden" name="option2Value" value={r.option2Value ?? ""} />
-                        <input type="hidden" name="fromStatus" value="SELECTED" />
-                        <input type="hidden" name="toStatus" value="ORDERED" />
-                        <button className="btn-primary btn-sm">Mark {r.byStatus.SELECTED} ordered</button>
-                      </form>
-                    )}
+                    <form id={`order-row-${r.itemId}-${r.option1Value ?? ""}-${r.option2Value ?? ""}`} action={orderRowAction} className="flex gap-1">
+                      <input type="hidden" name="campaignId" value={id} />
+                      <input type="hidden" name="itemId" value={r.itemId} />
+                      <input type="hidden" name="option1Value" value={r.option1Value ?? ""} />
+                      <input type="hidden" name="option2Value" value={r.option2Value ?? ""} />
+                      {(r.byStatus.SELECTED ?? 0) > 0 ? (
+                        <button name="intent" value="order" className="btn-primary btn-sm whitespace-nowrap">
+                          Mark {r.byStatus.SELECTED} ordered
+                        </button>
+                      ) : null}
+                      <button name="intent" value="price" className="btn-ghost btn-sm whitespace-nowrap" title="Save the price without changing statuses">
+                        Save price
+                      </button>
+                    </form>
                     {(r.byStatus.ORDERED ?? 0) > 0 && (
                       <form action={bulkItemStatusAction}>
                         <input type="hidden" name="campaignId" value={id} />

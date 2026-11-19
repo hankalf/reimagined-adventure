@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { slugify } from "@/lib/utils";
 import { createCampaignAction, type FormState } from "../actions";
 
-export function NewCampaignForm({ existing, defaultHr }: { existing: { id: string; name: string }[]; defaultHr: string }) {
+export function NewCampaignForm({ existing }: { existing: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createCampaignAction, null);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -44,12 +44,6 @@ export function NewCampaignForm({ existing, defaultHr }: { existing: { id: strin
           </label>
           <input id="totalBudget" name="totalBudget" inputMode="decimal" className="input" placeholder="5000" />
         </div>
-      </div>
-      <div>
-        <label htmlFor="hrEmails" className="label">
-          HR order emails go to
-        </label>
-        <input id="hrEmails" name="hrEmails" defaultValue={defaultHr} className="input" placeholder="hr@company.com, purchasing@company.com" />
       </div>
       {existing.length > 0 && (
         <div>

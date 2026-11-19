@@ -10,7 +10,7 @@ const tabs = [
   { seg: "employees", label: "Employees" },
   { seg: "orders", label: "Orders" },
   { seg: "budget", label: "Budget" },
-  { seg: "emails", label: "HR emails & Excel" },
+  { seg: "exports", label: "Excel & live sheet" },
   { seg: "branding", label: "Branding & text" },
   { seg: "settings", label: "Settings" },
 ];

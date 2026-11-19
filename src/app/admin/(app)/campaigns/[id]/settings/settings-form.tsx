@@ -15,8 +15,8 @@ type Settings = {
   allowChangeUntilOrdered: boolean;
   showSoldOutItems: boolean;
   hideItemsOverBudget: boolean;
+  showBudgetToEmployees: boolean;
   allEmployeesEligible: boolean;
-  hrEmails: string;
   totalBudget: string;
   defaultEmployeeBudget: string;
 };
@@ -67,12 +67,6 @@ export function SettingsForm({ campaign, canDelete, selectionCount }: { campaign
               <input id="closesAt" name="closesAt" type="date" defaultValue={campaign.closesAt} className="input" />
             </div>
             <div>
-              <label htmlFor="hrEmails" className="label">
-                HR order emails go to
-              </label>
-              <input id="hrEmails" name="hrEmails" defaultValue={campaign.hrEmails} className="input" placeholder="hr@company.com, purchasing@company.com" />
-            </div>
-            <div>
               <label htmlFor="currency" className="label">
                 Currency
               </label>
@@ -99,6 +93,7 @@ export function SettingsForm({ campaign, canDelete, selectionCount }: { campaign
             </div>
           </div>
           <Toggle name="hideItemsOverBudget" label="Hide gifts that cost more than the employee's budget" hint="Off: they are shown greyed out with an “over your budget” badge and cannot be chosen." checked={campaign.hideItemsOverBudget} />
+          <Toggle name="showBudgetToEmployees" label="Show employees their budget amount" hint="Employees never see gift prices or store links. This only adds a “Your gift budget: $75” line above the grid." checked={campaign.showBudgetToEmployees} />
         </section>
 
         <section className="card space-y-3 p-5">

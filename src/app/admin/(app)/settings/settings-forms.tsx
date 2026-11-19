@@ -1,53 +1,69 @@
 "use client";
 
 import { useActionState } from "react";
-import { saveSettingsAction, sendTestEmailAction, type SettingsState } from "./actions";
+import { saveOrdersWebhookAction, saveSettingsAction, testOrdersWebhookAction, type SettingsState } from "./actions";
 
-export function SettingsForms({ isAdmin, defaultHrEmails, companyName, adminEmail }: { isAdmin: boolean; defaultHrEmails: string; companyName: string; adminEmail: string }) {
-  const [saveState, saveAction, saving] = useActionState<SettingsState, FormData>(saveSettingsAction, null);
-  const [testState, testAction, testing] = useActionState<SettingsState, FormData>(sendTestEmailAction, null);
+export function DefaultsForm({ isAdmin, companyName }: { isAdmin: boolean; companyName: string }) {
+  const [state, action, pending] = useActionState<SettingsState, FormData>(saveSettingsAction, null);
   return (
-    <div className="space-y-6">
-      <section className="card p-5">
-        <h2 className="font-semibold">Defaults</h2>
-        <form action={saveAction} className="mt-3 space-y-3">
-          <div>
-            <label htmlFor="defaultHrEmails" className="label">
-              Default HR recipients for new campaigns
-            </label>
-            <input id="defaultHrEmails" name="defaultHrEmails" defaultValue={defaultHrEmails} className="input" placeholder="hr@company.com, purchasing@company.com" disabled={!isAdmin} />
-          </div>
-          <div>
-            <label htmlFor="companyName" className="label">
-              Company name
-            </label>
-            <input id="companyName" name="companyName" defaultValue={companyName} className="input" disabled={!isAdmin} />
-          </div>
-          {isAdmin && (
-            <button disabled={saving} className="btn-primary">
-              {saving ? "Saving…" : "Save"}
-            </button>
-          )}
-          {saveState?.error && <p className="text-sm text-red-700">{saveState.error}</p>}
-          {saveState?.success && <p className="text-sm text-emerald-700">{saveState.success}</p>}
-        </form>
-      </section>
-      <section className="card p-5">
-        <h2 className="font-semibold">Test email delivery</h2>
-        <form action={testAction} className="mt-3 flex flex-wrap items-end gap-2">
-          <div className="flex-1">
-            <label htmlFor="to" className="label">
-              Send a test to
-            </label>
-            <input id="to" name="to" defaultValue={adminEmail} className="input" />
-          </div>
-          <button disabled={testing} className="btn-secondary">
-            {testing ? "Sending…" : "Send test"}
+    <section className="card p-5">
+      <h2 className="font-semibold">Defaults</h2>
+      <form action={action} className="mt-3 space-y-3">
+        <div>
+          <label htmlFor="companyName" className="label">
+            Company name
+          </label>
+          <input id="companyName" name="companyName" defaultValue={companyName} className="input" disabled={!isAdmin} />
+        </div>
+        {isAdmin && (
+          <button disabled={pending} className="btn-primary">
+            {pending ? "Saving…" : "Save"}
           </button>
-          {testState?.error && <p className="w-full text-sm text-red-700">{testState.error}</p>}
-          {testState?.success && <p className="w-full text-sm text-emerald-700">{testState.success}</p>}
-        </form>
-      </section>
+        )}
+        {state?.error && <p className="text-sm text-red-700">{state.error}</p>}
+        {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
+      </form>
+    </section>
+  );
+}
+
+export function WebhookForm({ isAdmin, url, secret, lastStatus, lastAt, lastError }: { isAdmin: boolean; url: string; secret: string; lastStatus: string | null; lastAt: string | null; lastError: string | null }) {
+  const [state, action, pending] = useActionState<SettingsState, FormData>(saveOrdersWebhookAction, null);
+  const [testState, testAction, testing] = useActionState<SettingsState, FormData>(testOrdersWebhookAction, null);
+  return (
+    <div>
+      <form action={action} className="space-y-3">
+        <div>
+          <label htmlFor="webhook-url" className="label">
+            Webhook URL (from Power Automate, Zapier, Make or your own endpoint)
+          </label>
+          <input id="webhook-url" name="url" defaultValue={url} className="input font-mono text-xs" placeholder="https://prod-00.westus.logic.azure.com:443/workflows/…" disabled={!isAdmin} />
+        </div>
+        <div>
+          <label htmlFor="webhook-secret" className="label">
+            Signing secret (optional)
+          </label>
+          <input id="webhook-secret" name="secret" defaultValue={secret} className="input font-mono text-xs" placeholder="Any random string; we send an HMAC-SHA256 signature header so your flow can verify it" disabled={!isAdmin} />
+        </div>
+        {isAdmin && (
+          <button disabled={pending} className="btn-primary btn-sm">
+            {pending ? "Saving…" : "Save webhook"}
+          </button>
+        )}
+        {state?.error && <p className="text-sm text-red-700">{state.error}</p>}
+        {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
+      </form>
+      <form action={testAction} className="mt-3 flex flex-wrap items-center gap-3">
+        <button disabled={testing || !url} className="btn-secondary btn-sm">
+          {testing ? "Sending…" : "Send a test event"}
+        </button>
+        <span className="text-xs text-slate-500">
+          Last delivery: {lastStatus ? `${lastStatus}${lastAt ? ` at ${new Date(lastAt).toLocaleString()}` : ""}` : "never"}
+          {lastError ? ` — ${lastError}` : ""}
+        </span>
+        {testState?.error && <p className="w-full text-sm text-red-700">{testState.error}</p>}
+        {testState?.success && <p className="w-full text-sm text-emerald-700">{testState.success}</p>}
+      </form>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from "./selection-rules";
 import { dec } from "./utils";
 import { offeredGroups, optionGroups, removedValues, validatePick, type OptionGroup } from "./options";
+import { notifySelections } from "./webhook";
 
 export type PickItem = {
   id: string;
@@ -24,11 +25,12 @@ export type PickItem = {
   category: string | null;
   imageId: string | null;
   imageUrl: string | null;
-  productUrl: string | null;
+  /** Extra photos; option1Value set = shown when that value is picked. */
+  gallery: Array<{ imageId: string; option1Value: string | null }>;
+  framing: { thumbFit: string; thumbZoom: number; thumbFocusX: number; thumbFocusY: number };
   fulfillmentNote: string | null;
   /** Option groups offered in this campaign (catalog values filtered by the campaign's enabled subset). */
   groups: OptionGroup[];
-  cost: number | null;
   available: boolean;
   soldOut: boolean;
   remaining: number | null;
@@ -82,7 +84,7 @@ export async function getPickContext(campaignId: string, employeeId: string) {
     db.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
     db.employee.findUniqueOrThrow({ where: { id: employeeId } }),
     db.campaignEmployee.findUnique({ where: { campaignId_employeeId: { campaignId, employeeId } } }),
-    db.campaignItem.findMany({ where: { campaignId }, include: { item: true }, orderBy: [{ sortOrder: "asc" }, { item: { name: "asc" } }] }),
+    db.campaignItem.findMany({ where: { campaignId }, include: { item: { include: { images: { orderBy: { sortOrder: "asc" } } } } }, orderBy: [{ sortOrder: "asc" }, { item: { name: "asc" } }] }),
     db.selection.findUnique({ where: { campaignId_employeeId: { campaignId, employeeId } }, include: { item: true } }),
     db.selection.groupBy({ by: ["itemId"], where: { campaignId, status: { in: [...COMMITTED_STATUSES] } }, _count: { _all: true } }),
   ]);
@@ -102,10 +104,10 @@ export async function getPickContext(campaignId: string, employeeId: string) {
       category: ci.item.category,
       imageId: ci.item.imageId,
       imageUrl: ci.item.imageUrl,
-      productUrl: ci.item.productUrl,
+      gallery: ci.item.images.map((g) => ({ imageId: g.imageId, option1Value: g.option1Value })),
+      framing: { thumbFit: ci.item.thumbFit, thumbZoom: ci.item.thumbZoom, thumbFocusX: ci.item.thumbFocusX, thumbFocusY: ci.item.thumbFocusY },
       fulfillmentNote: ci.item.fulfillmentNote,
       groups: offeredGroups(ci.item, ci),
-      cost,
       available: avail.available,
       soldOut: avail.soldOut,
       remaining: avail.remaining,
@@ -158,7 +160,7 @@ export async function submitSelection(input: {
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await db.$transaction(
+      const outcome = await db.$transaction(
         async (tx) => {
           const existing = await tx.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: input.employeeId } } });
           if (existing) {
@@ -224,6 +226,8 @@ export async function submitSelection(input: {
         },
         { isolationLevel: "Serializable", maxWait: 5000, timeout: 15000 },
       );
+      if (outcome.ok) await notifySelections(outcome.changed ? "selection.changed" : "selection.created", [outcome.selectionId]);
+      return outcome;
     } catch (err) {
       const code = (err as { code?: string })?.code;
       if (code === "P2034" && attempt < 2) continue; // serialization conflict: retry
@@ -248,11 +252,10 @@ export async function setCampaignItemStock(input: { campaignId: string; itemId: 
   await db.campaignItem.update({ where: { campaignId_itemId: { campaignId: input.campaignId, itemId: input.itemId } }, data: { status } });
   let affected = 0;
   if (input.outOfStock) {
-    const res = await db.selection.updateMany({
-      where: { campaignId: input.campaignId, itemId: input.itemId, status: "SELECTED" },
-      data: { status: "NEEDS_REPICK" },
-    });
+    const ids = (await db.selection.findMany({ where: { campaignId: input.campaignId, itemId: input.itemId, status: "SELECTED" }, select: { id: true } })).map((r) => r.id);
+    const res = await db.selection.updateMany({ where: { id: { in: ids } }, data: { status: "NEEDS_REPICK" } });
     affected = res.count;
+    await notifySelections("selection.needs_repick", ids, { reason: "out_of_stock" });
   }
   await audit({ actorType: "ADMIN", actorId: input.adminId, action: input.outOfStock ? "item.out_of_stock" : "item.back_in_stock", entityType: "CampaignItem", entityId: `${input.campaignId}:${input.itemId}`, meta: { affected } });
   return { affected };
@@ -292,16 +295,16 @@ export async function setCampaignItemOptions(input: {
 
   let affected = 0;
   if (removed1.length > 0 || removed2.length > 0) {
-    const res = await db.selection.updateMany({
-      where: {
-        campaignId: input.campaignId,
-        itemId: input.itemId,
-        status: "SELECTED",
-        OR: [...(removed1.length > 0 ? [{ option1Value: { in: removed1 } }] : []), ...(removed2.length > 0 ? [{ option2Value: { in: removed2 } }] : [])],
-      },
-      data: { status: "NEEDS_REPICK" },
-    });
+    const where = {
+      campaignId: input.campaignId,
+      itemId: input.itemId,
+      status: "SELECTED" as const,
+      OR: [...(removed1.length > 0 ? [{ option1Value: { in: removed1 } }] : []), ...(removed2.length > 0 ? [{ option2Value: { in: removed2 } }] : [])],
+    };
+    const ids = (await db.selection.findMany({ where, select: { id: true } })).map((r) => r.id);
+    const res = await db.selection.updateMany({ where: { id: { in: ids } }, data: { status: "NEEDS_REPICK" } });
     affected = res.count;
+    await notifySelections("selection.needs_repick", ids, { reason: "option_removed", removed: [...removed1, ...removed2] });
   }
   await audit({ actorType: "ADMIN", actorId: input.adminId, action: "item.options_changed", entityType: "CampaignItem", entityId: `${input.campaignId}:${input.itemId}`, meta: { enabled1, enabled2, removed1, removed2, affected } });
   return { ok: true, affected, removed1, removed2 };
@@ -321,12 +324,14 @@ export async function updateSelectionStatuses(input: { ids: string[]; status: "S
   }
   const res = await db.selection.updateMany({ where: { id: { in: input.ids }, status: { not: "NEEDS_REPICK" } }, data });
   await audit({ actorType: "ADMIN", actorId: input.adminId, action: `selection.status.${input.status.toLowerCase()}`, entityType: "Selection", entityId: input.ids.length === 1 ? input.ids[0] : "bulk", meta: { count: res.count, ids: input.ids.slice(0, 200) } });
+  if (res.count > 0) await notifySelections("selection.status_changed", input.ids, { newStatus: input.status });
   return res.count;
 }
 
 export async function resetSelection(selectionId: string, adminId: string): Promise<void> {
   const existing = await db.selection.findUnique({ where: { id: selectionId } });
   if (!existing) return;
+  await notifySelections("selection.reset", [selectionId]);
   await db.selection.delete({ where: { id: selectionId } });
   await audit({ actorType: "ADMIN", actorId: adminId, action: "selection.reset", entityType: "Selection", entityId: selectionId, meta: { employeeId: existing.employeeId, itemId: existing.itemId, status: existing.status } });
 }

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { publicUrl } from "@/lib/public-url";
 
 const PUBLIC_ADMIN_PATHS = ["/admin/login", "/admin/forgot-password", "/admin/set-password", "/admin/logout"];
 
@@ -25,17 +26,10 @@ export async function proxy(request: NextRequest) {
     }
   }
   if (!role) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
-    url.search = "";
-    if (pathname !== "/admin") url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(publicUrl(request, pathname !== "/admin" ? `/admin/login?next=${encodeURIComponent(pathname)}` : "/admin/login"));
   }
   if (pathname.startsWith("/admin/settings/users") && role !== "ADMIN") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin";
-    url.search = "?forbidden=1";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(publicUrl(request, "/admin?forbidden=1"));
   }
   return NextResponse.next();
 }

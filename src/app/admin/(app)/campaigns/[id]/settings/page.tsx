@@ -23,8 +23,8 @@ export default async function CampaignSettingsPage({ params }: PageProps<"/admin
         allowChangeUntilOrdered: c.allowChangeUntilOrdered,
         showSoldOutItems: c.showSoldOutItems,
         hideItemsOverBudget: c.hideItemsOverBudget,
+        showBudgetToEmployees: c.showBudgetToEmployees,
         allEmployeesEligible: c.allEmployeesEligible,
-        hrEmails: c.hrEmails.join(", "),
         totalBudget: dec(c.totalBudget)?.toString() ?? "",
         defaultEmployeeBudget: dec(c.defaultEmployeeBudget)?.toString() ?? "",
       }}

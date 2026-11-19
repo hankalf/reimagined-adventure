@@ -6,6 +6,7 @@ import { imageSrc } from "@/lib/image-src";
 import { dec, money } from "@/lib/utils";
 import { optionGroups } from "@/lib/options";
 import { ImportItemsForm } from "./import-form";
+import { ItemThumb } from "@/components/item-thumb";
 
 export default async function ItemsPage({ searchParams }: PageProps<"/admin/items">) {
   const sp = await searchParams;
@@ -34,6 +35,11 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
       {typeof sp.saved === "string" && (
         <Alert kind="success" className="mb-4">
           Saved “{sp.saved}”.
+        </Alert>
+      )}
+      {typeof sp.warn === "string" && (
+        <Alert kind="warning" className="mb-4">
+          {sp.warn}
         </Alert>
       )}
       <details className="card mb-4 p-4" open={sp.import === "1"}>
@@ -95,13 +101,8 @@ export default async function ItemsPage({ searchParams }: PageProps<"/admin/item
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td>
                       <Link href={`/admin/items/${item.id}`} className="flex items-center gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                          {src ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={src} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xl">🎁</div>
-                          )}
+                        <div className="w-14 shrink-0">
+                          <ItemThumb src={src} framing={item} className="rounded-lg border border-slate-200" placeholder="🎁" />
                         </div>
                         <div>
                           <div className="font-medium text-slate-900 hover:underline">{item.name}</div>

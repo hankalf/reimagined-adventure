@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Alert, StatusBadge } from "@/components/ui";
 import { offeredValues, optionGroups } from "@/lib/options";
 import { OptionsSaveButton } from "./options-save-button";
+import { ItemThumb } from "@/components/item-thumb";
 import { db } from "@/lib/db";
 import { imageSrc } from "@/lib/image-src";
 import { COMMITTED_STATUSES } from "@/lib/budget";
@@ -100,13 +101,8 @@ export default async function CampaignItemsPage({ params, searchParams }: PagePr
                   </td>
                   <td>
                     <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                        {src ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={src} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full items-center justify-center">🎁</div>
-                        )}
+                      <div className="w-14 shrink-0">
+                        <ItemThumb src={src} framing={r.item} className="rounded-lg border border-slate-200" />
                       </div>
                       <div>
                         <Link href={`/admin/items/${r.itemId}`} className="font-medium text-slate-900 hover:underline">
@@ -200,13 +196,8 @@ export default async function CampaignItemsPage({ params, searchParams }: PagePr
                   <li key={item.id} className="rounded-lg border border-slate-200 hover:bg-slate-50">
                     <label className="flex cursor-pointer items-center gap-3 p-2">
                       <input type="checkbox" name="itemIds" value={item.id} className="h-4 w-4" />
-                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-slate-100">
-                        {src ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={src} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full items-center justify-center">🎁</div>
-                        )}
+                      <div className="w-12 shrink-0">
+                        <ItemThumb src={src} framing={item} className="rounded border border-slate-200" />
                       </div>
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">{item.name}</div>

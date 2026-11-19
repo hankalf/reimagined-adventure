@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import { dict, fill, formatDate, localized } from "@/i18n";
 import { getEmployeeSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { imageSrc } from "@/lib/image-src";
+import { imageSrcForOption } from "@/lib/image-src";
 import { getLang } from "@/lib/lang";
 import { qrDataUrl } from "@/lib/qr";
 import { optionDetail } from "@/lib/options";
 import { DancingElf } from "@/components/dancing-elf";
+import { ItemThumb } from "@/components/item-thumb";
 import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
 
@@ -19,14 +20,14 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
   if (!session) redirect(`/g/${slug}`);
 
   const [selection, employee] = await Promise.all([
-    db.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: session.employeeId } }, include: { item: true } }),
+    db.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: session.employeeId } }, include: { item: { include: { images: true } } } }),
     db.employee.findUniqueOrThrow({ where: { id: session.employeeId } }),
   ]);
   if (!selection) redirect(`/g/${slug}/pick`);
   if (selection.status === "NEEDS_REPICK" && campaignAcceptsPicks(campaign).ok) redirect(`/g/${slug}/pick`);
 
   const name = localized(lang, selection.item.name, selection.item.nameEs);
-  const src = imageSrc(selection.item, false);
+  const src = imageSrcForOption(selection.item, selection.option1Value, false);
   const canChange = campaignAcceptsPicks(campaign).ok && canChangeSelection(selection.status, campaign.allowChangeUntilOrdered);
   const pickup = localized(lang, campaign.pickupInstructions, campaign.pickupInstructionsEs) || t.done.pickupDefault;
   const statusLabel = t.done.statuses[selection.status as keyof typeof t.done.statuses] ?? selection.status;
@@ -53,14 +54,7 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
         </div>
         <div className="grid gap-6 p-6 sm:grid-cols-5">
           <div className="sm:col-span-2">
-            <div className="aspect-square overflow-hidden rounded-xl bg-slate-100">
-              {src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt={name} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-6xl">🎁</div>
-              )}
-            </div>
+            <ItemThumb src={src} alt={name} framing={{ thumbFit: selection.item.thumbFit }} className="rounded-xl border border-slate-100" loading="eager" />
           </div>
           <div className="sm:col-span-3">
             <p className="text-sm uppercase tracking-wide text-slate-500">{t.done.youChose}</p>

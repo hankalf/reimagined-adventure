@@ -7,31 +7,45 @@ import { newInviteToken, requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailShell, escapeHtml, sendEmail } from "@/lib/email";
 import { setSetting, SETTING_KEYS } from "@/lib/settings";
-import { appUrl, parseEmails } from "@/lib/utils";
+import { appUrl } from "@/lib/utils";
+import { sendTestEvent, WEBHOOK_KEYS } from "@/lib/webhook";
+import { randomBytes } from "node:crypto";
 
 export type SettingsState = { error?: string; success?: string; link?: string } | null;
 
 export async function saveSettingsAction(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
   await requireAdmin({ role: "ADMIN" });
-  const emails = parseEmails(String(formData.get("defaultHrEmails") ?? ""));
-  await setSetting(SETTING_KEYS.defaultHrEmails, emails.join(", "));
   await setSetting(SETTING_KEYS.companyName, String(formData.get("companyName") ?? "").trim());
   revalidatePath("/admin/settings");
   return { success: "Settings saved." };
 }
 
-export async function sendTestEmailAction(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
-  const admin = await requireAdmin();
-  const to = parseEmails(String(formData.get("to") ?? admin.email));
-  if (to.length === 0) return { error: "Enter a valid email address." };
-  const log = await sendEmail({
-    to,
-    subject: "Gift portal test email",
-    html: emailShell("Test email", `<p>If you can read this, email from the gift portal is working.</p><p style="font-size:12px;color:#6b7280">Sent by ${escapeHtml(admin.name)} from ${escapeHtml(appUrl())}</p>`),
-  });
-  if (log.status === "FAILED") return { error: `Sending failed: ${log.error}` };
-  if (log.status === "LOGGED") return { success: "Console mode: the email was recorded in the log but not delivered. Set EMAIL_TRANSPORT=smtp to send real email." };
-  return { success: `Test email sent to ${to.join(", ")}.` };
+// ---------- orders spreadsheet: push webhook + live feed ----------
+
+export async function saveOrdersWebhookAction(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
+  await requireAdmin({ role: "ADMIN" });
+  const url = String(formData.get("url") ?? "").trim();
+  const secret = String(formData.get("secret") ?? "").trim();
+  if (url && !/^https?:\/\//i.test(url)) return { error: "The webhook URL must start with http:// or https://" };
+  await setSetting(WEBHOOK_KEYS.url, url);
+  await setSetting(WEBHOOK_KEYS.secret, secret);
+  revalidatePath("/admin/settings");
+  return { success: url ? "Webhook saved. Every order change will be posted there." : "Webhook cleared." };
+}
+
+export async function testOrdersWebhookAction(_prev: SettingsState, formData: FormData): Promise<SettingsState> {
+  await requireAdmin();
+  void formData;
+  const res = await sendTestEvent();
+  revalidatePath("/admin/settings");
+  if (!res.sent) return { error: `Test failed: ${res.error ?? "unknown error"}` };
+  return { success: `Test event delivered (HTTP ${res.status}). Check that a row appeared in your sheet or flow.` };
+}
+
+export async function rotateGlobalFeedTokenAction(): Promise<void> {
+  await requireAdmin({ role: "ADMIN" });
+  await setSetting(WEBHOOK_KEYS.feedToken, randomBytes(24).toString("hex"));
+  revalidatePath("/admin/settings");
 }
 
 // ---------- admin users ----------

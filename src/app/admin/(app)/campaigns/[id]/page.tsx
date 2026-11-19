@@ -13,7 +13,6 @@ export default async function CampaignOverviewPage({ params }: PageProps<"/admin
   const checklist = [
     { done: data.summary.length > 0 || (await db.campaignItem.count({ where: { campaignId: id } })) > 0, label: "Add gifts to show", href: `${base}/items` },
     { done: data.counts.eligible > 0, label: "Upload the employee list", href: `${base}/employees` },
-    { done: campaign.hrEmails.length > 0, label: "Set HR email recipients", href: `${base}/settings` },
     { done: Boolean(campaign.welcomeMessage || campaign.logoImageId), label: "Add a welcome message and logo", href: `${base}/branding` },
     { done: campaign.status === "OPEN", label: "Open the campaign and print the QR poster", href: `${base}/poster` },
   ];
@@ -84,12 +83,8 @@ export default async function CampaignOverviewPage({ params }: PageProps<"/admin
               <dd>{fmtDate(campaign.closesAt)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt>HR recipients</dt>
-              <dd>{campaign.hrEmails.length}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt>Last HR email</dt>
-              <dd>{fmtDate(campaign.lastHrEmailAt, true)}</dd>
+              <dt>Gifts shown</dt>
+              <dd>{await db.campaignItem.count({ where: { campaignId: id } })}</dd>
             </div>
           </dl>
         </section>

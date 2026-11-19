@@ -54,3 +54,24 @@ export async function processImage(input: Buffer, mime: string): Promise<Process
 export function isAllowedImageMime(mime: string): boolean {
   return ALLOWED.has(mime);
 }
+
+/** Download an image from a URL (10 s timeout, size-capped). Returns null on any failure. */
+export async function downloadImage(url: string, timeoutMs = 10_000): Promise<{ buffer: Buffer; mime: string } | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: "follow", headers: { "user-agent": "Mozilla/5.0 (compatible; GiftPortal/1.0)", accept: "image/*" } });
+    if (!res.ok) return null;
+    const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+    if (!mime.startsWith("image/")) return null;
+    const length = Number(res.headers.get("content-length") ?? 0);
+    if (length > MAX_UPLOAD_BYTES) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.byteLength === 0 || buffer.byteLength > MAX_UPLOAD_BYTES) return null;
+    return { buffer, mime: mime === "image/jpg" ? "image/jpeg" : mime };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}

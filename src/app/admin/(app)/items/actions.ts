@@ -7,8 +7,9 @@ import { canonicalAmazonUrl, extractAsin, fetchProductMetadata, isAmazonUrl } fr
 import { audit } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { MAX_UPLOAD_BYTES, processImage } from "@/lib/images";
+import { downloadImage, processImage } from "@/lib/images";
 import { parseItemFile } from "@/lib/item-import";
+import { recordPriceChange } from "@/lib/pricing";
 import { parseOptionValues } from "@/lib/options";
 
 export type ItemFormState = { error?: string; success?: string } | null;
@@ -32,11 +33,112 @@ const itemSchema = z.object({
   imageUrl: z.string().trim().max(2000).optional(),
   active: z.string().optional(),
   removeImage: z.string().optional(),
+  thumbFit: z.string().optional(),
+  thumbZoom: z.string().optional(),
+  thumbFocusX: z.string().optional(),
+  thumbFocusY: z.string().optional(),
 });
+
+const clampInt = (raw: string | undefined, min: number, max: number, fallback: number) => {
+  const n = Math.round(Number(raw ?? ""));
+  return raw && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
 
 function str(formData: FormData, key: string): string | undefined {
   const v = formData.get(key);
   return typeof v === "string" ? v : undefined;
+}
+
+/** Process an uploaded File into a stored Image row; returns its id. */
+async function storeUploadedFile(file: File): Promise<string> {
+  const processed = await processImage(Buffer.from(await file.arrayBuffer()), file.type);
+  return (await db.image.create({ data: processed })).id;
+}
+
+/** Download a remote photo and store it; null when it cannot be fetched or processed. */
+async function storeImageFromUrl(url: string): Promise<string | null> {
+  const fetched = await downloadImage(url);
+  if (!fetched) return null;
+  try {
+    const processed = await processImage(fetched.buffer, fetched.mime);
+    return (await db.image.create({ data: processed })).id;
+  } catch {
+    return null;
+  }
+}
+
+async function deleteItemImage(row: { id: string; imageId: string }): Promise<void> {
+  await db.itemImage.delete({ where: { id: row.id } }).catch(() => undefined);
+  await db.image.delete({ where: { id: row.imageId } }).catch(() => undefined);
+}
+
+/**
+ * Gallery and per-colour photos for a gift: extra uploads, removals, per-colour uploads/removals, and photos
+ * fetched from the product page. Returns warnings for photos that could not be downloaded.
+ */
+async function syncItemImages(itemId: string, formData: FormData, option1Values: string[], opts: { hasPrimary: boolean }): Promise<{ warnings: string[]; primaryImageId: string | null }> {
+  const warnings: string[] = [];
+  let primaryImageId: string | null = null;
+  const existing = await db.itemImage.findMany({ where: { itemId }, orderBy: { sortOrder: "asc" } });
+  let nextOrder = existing.reduce((m, r) => Math.max(m, r.sortOrder), -1) + 1;
+
+  // Removals requested from the form
+  const removeIds = new Set(formData.getAll("removeImageIds").map(String));
+  for (const row of existing) if (removeIds.has(row.id)) await deleteItemImage(row);
+
+  // Colour photos whose value no longer exists
+  for (const row of existing) if (row.option1Value && !option1Values.includes(row.option1Value) && !removeIds.has(row.id)) await deleteItemImage(row);
+
+  // Extra gallery uploads
+  for (const file of formData.getAll("extraImages")) {
+    if (!(file instanceof File) || file.size === 0) continue;
+    try {
+      const imageId = await storeUploadedFile(file);
+      await db.itemImage.create({ data: { itemId, imageId, sortOrder: nextOrder++ } });
+    } catch (err) {
+      warnings.push(`${file.name}: ${err instanceof Error ? err.message : "could not process"}`);
+    }
+  }
+
+  // Per-colour uploads / removals
+  for (const value of option1Values) {
+    const current = existing.find((r) => r.option1Value === value && !removeIds.has(r.id));
+    const file = formData.get(`colorImage:${value}`);
+    if (file instanceof File && file.size > 0) {
+      try {
+        const imageId = await storeUploadedFile(file);
+        if (current) await deleteItemImage(current);
+        await db.itemImage.create({ data: { itemId, imageId, option1Value: value, sortOrder: nextOrder++ } });
+      } catch (err) {
+        warnings.push(`${value}: ${err instanceof Error ? err.message : "could not process"}`);
+      }
+    } else if (formData.get(`colorImageRemove:${value}`) === "1" && current) {
+      await deleteItemImage(current);
+    }
+  }
+
+  // Photos fetched from the product page (URLs chosen in the form)
+  if (formData.get("useFetchedPhotos") === "on") {
+    let urls: string[] = [];
+    try {
+      urls = JSON.parse(str(formData, "autoImageUrls") || "[]");
+    } catch {
+      urls = [];
+    }
+    let failed = 0;
+    for (const url of urls.slice(0, 8)) {
+      if (typeof url !== "string") continue;
+      const imageId = await storeImageFromUrl(url);
+      if (!imageId) {
+        failed += 1;
+        continue;
+      }
+      if (!opts.hasPrimary && !primaryImageId) primaryImageId = imageId;
+      else await db.itemImage.create({ data: { itemId, imageId, sortOrder: nextOrder++ } });
+    }
+    if (failed > 0) warnings.push(`${failed} of ${urls.length} product photo(s) could not be downloaded; you can upload them manually.`);
+  }
+  return { warnings, primaryImageId };
 }
 
 export async function saveItemAction(_prev: ItemFormState, formData: FormData): Promise<ItemFormState> {
@@ -60,6 +162,10 @@ export async function saveItemAction(_prev: ItemFormState, formData: FormData): 
     imageUrl: str(formData, "imageUrl"),
     active: str(formData, "active"),
     removeImage: str(formData, "removeImage"),
+    thumbFit: str(formData, "thumbFit"),
+    thumbZoom: str(formData, "thumbZoom"),
+    thumbFocusX: str(formData, "thumbFocusX"),
+    thumbFocusY: str(formData, "thumbFocusY"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please check the form." };
   const d = parsed.data;
@@ -85,9 +191,7 @@ export async function saveItemAction(_prev: ItemFormState, formData: FormData): 
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
     try {
-      const processed = await processImage(Buffer.from(await file.arrayBuffer()), file.type);
-      const img = await db.image.create({ data: processed });
-      imageId = img.id;
+      imageId = await storeUploadedFile(file);
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Could not process the image." };
     }
@@ -113,23 +217,35 @@ export async function saveItemAction(_prev: ItemFormState, formData: FormData): 
     option2Values,
     imageUrl: d.imageUrl || null,
     active: d.active === "on" || d.active === "1",
+    thumbFit: d.thumbFit === "cover" ? "cover" : "contain",
+    thumbZoom: clampInt(d.thumbZoom, 100, 250, 100),
+    thumbFocusX: clampInt(d.thumbFocusX, 0, 100, 50),
+    thumbFocusY: clampInt(d.thumbFocusY, 0, 100, 50),
     ...(imageId !== undefined ? { imageId } : {}),
   };
 
   let id = d.id;
+  let hasPrimary: boolean;
   if (id) {
     const existing = await db.item.findUnique({ where: { id } });
     if (!existing) return { error: "Gift not found." };
     await db.item.update({ where: { id }, data });
+    await recordPriceChange({ itemId: id, oldPrice: existing.unitCost, newPrice: unitCost, source: "CATALOG", admin: { id: admin.id, name: admin.name } });
     if (imageId !== undefined && existing.imageId && existing.imageId !== imageId) await db.image.delete({ where: { id: existing.imageId } }).catch(() => undefined);
+    hasPrimary = imageId === undefined ? Boolean(existing.imageId) : Boolean(imageId);
     await audit({ actorType: "ADMIN", actorId: admin.id, action: "item.updated", entityType: "Item", entityId: id, meta: { name: d.name } });
   } else {
     const created = await db.item.create({ data: { ...data, imageId: imageId ?? null } });
     id = created.id;
+    hasPrimary = Boolean(imageId);
+    await recordPriceChange({ itemId: id, oldPrice: null, newPrice: unitCost, source: "CATALOG", admin: { id: admin.id, name: admin.name }, note: "Created" });
     await audit({ actorType: "ADMIN", actorId: admin.id, action: "item.created", entityType: "Item", entityId: id, meta: { name: d.name } });
   }
+  const synced = await syncItemImages(id, formData, option1Values, { hasPrimary });
+  if (synced.primaryImageId) await db.item.update({ where: { id }, data: { imageId: synced.primaryImageId } });
   revalidatePath("/admin/items");
-  redirect(`/admin/items?saved=${encodeURIComponent(d.name)}`);
+  const warn = synced.warnings.length > 0 ? `&warn=${encodeURIComponent(synced.warnings.join(" "))}` : "";
+  redirect(`/admin/items?saved=${encodeURIComponent(d.name)}${warn}`);
 }
 
 export async function deleteItemAction(formData: FormData): Promise<void> {
@@ -143,15 +259,29 @@ export async function deleteItemAction(formData: FormData): Promise<void> {
     await db.item.update({ where: { id }, data: { active: false } });
     await audit({ actorType: "ADMIN", actorId: admin.id, action: "item.deactivated", entityType: "Item", entityId: id, meta: { reason: "has selections" } });
   } else {
+    const gallery = await db.itemImage.findMany({ where: { itemId: id } });
     await db.item.delete({ where: { id } });
     if (item.imageId) await db.image.delete({ where: { id: item.imageId } }).catch(() => undefined);
+    for (const g of gallery) await db.image.delete({ where: { id: g.imageId } }).catch(() => undefined);
     await audit({ actorType: "ADMIN", actorId: admin.id, action: "item.deleted", entityType: "Item", entityId: id, meta: { name: item.name } });
   }
   revalidatePath("/admin/items");
   redirect("/admin/items");
 }
 
-export type AmazonLookup = { ok: boolean; asin?: string; url?: string; title?: string; imageUrl?: string; price?: number; description?: string; message: string };
+export type AmazonLookup = {
+  ok: boolean;
+  asin?: string;
+  url?: string;
+  title?: string;
+  imageUrl?: string;
+  images?: string[];
+  price?: number;
+  description?: string;
+  category?: string;
+  variants?: Array<{ label: string; values: string[] }>;
+  message: string;
+};
 
 /** Called from the item form: normalise the Amazon link and try to prefill details. */
 export async function lookupAmazonAction(url: string): Promise<AmazonLookup> {
@@ -161,34 +291,27 @@ export async function lookupAmazonAction(url: string): Promise<AmazonLookup> {
   const canonical = canonicalAmazonUrl(asin, url);
   const meta = await fetchProductMetadata(canonical);
   if (meta.source === "none") {
-    return { ok: true, asin, url: canonical, message: `Found ASIN ${asin}. Amazon didn't share product details automatically, so please type the name and price and upload a photo.` };
+    return { ok: true, asin, url: canonical, images: [], variants: [], message: `Found ASIN ${asin}. Amazon didn't share product details automatically (it often blocks automated requests), so please type the name and price and upload photos.` };
   }
-  return { ok: true, asin, url: canonical, title: meta.title, imageUrl: meta.imageUrl, price: meta.price, description: meta.description, message: `Found ASIN ${asin} and prefilled the details from Amazon. Please double-check them.` };
+  const found = [meta.title && "name", meta.price && "price", meta.images.length > 0 && `${meta.images.length} photo(s)`, meta.variants.length > 0 && "options", meta.category && "category"].filter(Boolean).join(", ");
+  return {
+    ok: true,
+    asin,
+    url: canonical,
+    title: meta.title,
+    imageUrl: meta.imageUrl,
+    images: meta.images,
+    price: meta.price,
+    description: meta.description,
+    category: meta.category,
+    variants: meta.variants,
+    message: `Found ASIN ${asin} and prefilled ${found || "what was available"} from the product page. Please double-check before saving.`,
+  };
 }
 
 // ---------- spreadsheet import ----------
 
 export type ImportItemsState = { error?: string; summary?: { created: number; updated: number; skipped: number; imagesStored: number; errors: string[] } } | null;
-
-async function fetchImage(url: string): Promise<{ buffer: Buffer; mime: string } | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(url, { signal: controller.signal, headers: { "user-agent": "Mozilla/5.0 (compatible; GiftPortal/1.0)" } });
-    if (!res.ok) return null;
-    const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
-    if (!mime.startsWith("image/")) return null;
-    const length = Number(res.headers.get("content-length") ?? 0);
-    if (length > MAX_UPLOAD_BYTES) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.byteLength > MAX_UPLOAD_BYTES) return null;
-    return { buffer, mime };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export async function importItemsAction(_prev: ImportItemsState, formData: FormData): Promise<ImportItemsState> {
   const admin = await requireAdmin();
@@ -212,18 +335,30 @@ export async function importItemsAction(_prev: ImportItemsState, formData: FormD
           : await db.item.findFirst({ where: { name: { equals: row.name, mode: "insensitive" } } });
 
     let imageId: string | undefined;
-    if (downloadImages && row.imageUrl && (!existing || !existing.imageId)) {
-      const fetched = await fetchImage(row.imageUrl);
-      if (fetched) {
-        try {
-          const processed = await processImage(fetched.buffer, fetched.mime);
-          imageId = (await db.image.create({ data: processed })).id;
+    const galleryIds: string[] = [];
+    const colorIds: Array<{ value: string; imageId: string }> = [];
+    if (downloadImages) {
+      const [primaryUrl, ...moreUrls] = row.imageUrls;
+      if (primaryUrl && (!existing || !existing.imageId)) {
+        const id = await storeImageFromUrl(primaryUrl);
+        if (id) {
+          imageId = id;
           imagesStored += 1;
-        } catch {
-          errors.push(`Row ${row.rowNumber}: could not process the image at ${row.imageUrl}; kept as a link.`);
-        }
-      } else {
-        errors.push(`Row ${row.rowNumber}: could not download ${row.imageUrl}; kept as a link.`);
+        } else errors.push(`Row ${row.rowNumber}: could not download ${primaryUrl}; kept as a link.`);
+      }
+      for (const url of moreUrls) {
+        const id = await storeImageFromUrl(url);
+        if (id) {
+          galleryIds.push(id);
+          imagesStored += 1;
+        } else errors.push(`Row ${row.rowNumber}: could not download ${url}.`);
+      }
+      for (const c of row.colorImages) {
+        const id = await storeImageFromUrl(c.url);
+        if (id) {
+          colorIds.push({ value: c.value, imageId: id });
+          imagesStored += 1;
+        } else errors.push(`Row ${row.rowNumber}: could not download the ${c.value} photo.`);
       }
     }
 
@@ -243,16 +378,30 @@ export async function importItemsAction(_prev: ImportItemsState, formData: FormD
       option1Values: row.option1Values,
       option2Label: row.option2Label,
       option2Values: row.option2Values,
-      imageUrl: row.imageUrl,
+      imageUrl: row.imageUrls[0] ?? null,
       active: row.active,
       ...(imageId ? { imageId } : {}),
     };
+    let itemId: string;
     if (existing) {
       await db.item.update({ where: { id: existing.id }, data });
+      itemId = existing.id;
       updated += 1;
+      await recordPriceChange({ itemId, oldPrice: existing.unitCost, newPrice: row.unitCost, source: "IMPORT", admin: { id: admin.id, name: admin.name }, note: file.name });
     } else {
-      await db.item.create({ data });
+      itemId = (await db.item.create({ data })).id;
       created += 1;
+      await recordPriceChange({ itemId, oldPrice: null, newPrice: row.unitCost, source: "IMPORT", admin: { id: admin.id, name: admin.name }, note: `Imported from ${file.name}` });
+    }
+    if (galleryIds.length > 0 || colorIds.length > 0) {
+      const max = await db.itemImage.aggregate({ where: { itemId }, _max: { sortOrder: true } });
+      let order = (max._max.sortOrder ?? -1) + 1;
+      for (const gid of galleryIds) await db.itemImage.create({ data: { itemId, imageId: gid, sortOrder: order++ } });
+      for (const c of colorIds) {
+        const old = await db.itemImage.findFirst({ where: { itemId, option1Value: c.value } });
+        if (old) await deleteItemImage(old);
+        await db.itemImage.create({ data: { itemId, imageId: c.imageId, option1Value: c.value, sortOrder: order++ } });
+      }
     }
   }
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "items.imported", entityType: "Item", entityId: "bulk", meta: { file: file.name, created, updated, skipped: parsed.skipped, imagesStored } });

@@ -12,6 +12,7 @@ import ExcelJS from "exceljs";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import http from "node:http";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "admin@example.com";
@@ -46,6 +47,35 @@ try {
   await a.waitForURL(/\/admin\/campaigns$/);
   ok("logged in and redirected back to the requested page");
 
+  section("Settings: connect the orders webhook to a local receiver");
+  const received = [];
+  const receiver = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        received.push({ event: req.headers["x-giftportal-event"], signature: req.headers["x-giftportal-signature"], body: JSON.parse(body) });
+      } catch {
+        received.push({ event: "unparseable", body });
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((r) => receiver.listen(0, "127.0.0.1", r));
+  const hookUrl = `http://127.0.0.1:${receiver.address().port}/hook`;
+  await a.goto(`${BASE}/admin/settings`);
+  await a.fill("#webhook-url", hookUrl);
+  await a.fill("#webhook-secret", "e2e-secret");
+  await a.click('button:has-text("Save webhook")');
+  await a.waitForSelector("text=/Webhook saved/");
+  await a.click('button:has-text("Send a test event")');
+  await a.waitForSelector("text=/Test event delivered/");
+  assert(received.some((r) => r.event === "test" && r.signature?.startsWith("sha256=")), "test event reached the receiver with a signature");
+  const globalFeed = await a.locator("input[readonly]").first().inputValue();
+  assert(globalFeed.includes("/api/feed/all/"), "global live link shown");
+  ok("webhook configured and test event delivered; global live link available");
+
   section("Create a product gift with an Amazon link, options and an uploaded photo");
   const png = await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 220, g: 60, b: 90 } } }).png().toBuffer();
   const pngPath = path.join(SHOTS, "mug.png");
@@ -64,6 +94,15 @@ try {
   await a.fill("#option2Label", "Size");
   await a.fill("#option2Values", "11oz, 15oz");
   await a.setInputFiles("#image", pngPath);
+  const extra1 = path.join(SHOTS, "extra1.png");
+  const extra2 = path.join(SHOTS, "extra2.png");
+  const redPng = path.join(SHOTS, "red.png");
+  fs.writeFileSync(extra1, await sharp({ create: { width: 500, height: 400, channels: 3, background: { r: 40, g: 120, b: 200 } } }).png().toBuffer());
+  fs.writeFileSync(extra2, await sharp({ create: { width: 500, height: 400, channels: 3, background: { r: 40, g: 180, b: 90 } } }).png().toBuffer());
+  fs.writeFileSync(redPng, await sharp({ create: { width: 500, height: 500, channels: 3, background: { r: 230, g: 30, b: 30 } } }).png().toBuffer());
+  await a.setInputFiles("#extraImages", [extra1, extra2]);
+  await a.waitForSelector("#colorImage-Red");
+  await a.setInputFiles("#colorImage-Red", redPng);
   await a.click('button:has-text("Create gift")');
   await a.waitForURL(/\/admin\/items\?saved=/);
   const mugRow = a.locator("tr", { hasText: `E2E Mug ${run}` });
@@ -73,6 +112,12 @@ try {
   const thumbRes = await a.request.get(`${BASE}${thumbSrc}`);
   assert(thumbRes.ok() && (thumbRes.headers()["content-type"] ?? "").startsWith("image/"), "thumbnail route returns an image");
   ok(`thumbnail stored and served (${thumbRes.headers()["content-type"]})`);
+  await mugRow.locator("a").first().click();
+  await a.waitForSelector("#extraImages");
+  assert((await a.locator('input[name="removeImageIds"]').count()) === 2, "two gallery photos saved");
+  const redThumb = await a.locator("#colorImage-Red").locator("xpath=../..").locator("img").getAttribute("src");
+  assert(redThumb && redThumb.includes("/api/images/"), "Red colour photo saved");
+  ok("gallery photos and the Red colour photo are stored on the gift");
   await shot(a, "catalog");
 
   section("Create a custom (non-purchase) gift");
@@ -92,7 +137,6 @@ try {
   await a.fill("#slug", SLUG);
   await a.fill("#defaultEmployeeBudget", "75");
   await a.fill("#totalBudget", "1000");
-  await a.fill("#hrEmails", "hr@test.local");
   await a.click('button:has-text("Create campaign")');
   await a.waitForURL(/\/admin\/campaigns\/[^/]+\/items/);
   const campaignId = a.url().match(/campaigns\/([^/]+)\/items/)[1];
@@ -222,14 +266,20 @@ try {
   await e.waitForSelector('[role=dialog]');
   assert((await e.locator('[role=dialog] label', { hasText: /^Green$/ }).count()) === 0, "Green is hidden from employees in this campaign");
   assert((await e.locator('[role=dialog] label', { hasText: /^Blue$/ }).count()) === 1, "Blue is offered");
+  assert((await e.locator("[data-gallery-thumb]").count()) === 4, "gallery shows main + 2 extra + Red photos");
+  const mainBefore = await e.locator("[data-gallery-main]").getAttribute("src");
   await e.locator('[role=dialog] label', { hasText: /^Red$/ }).click();
+  const mainAfter = await e.locator("[data-gallery-main]").getAttribute("src");
+  assert(mainAfter !== mainBefore && (await e.locator("[data-gallery-main]").getAttribute("data-option")) === "Red", "choosing Red switches to the Red photo");
   await e.locator('[role=dialog] label', { hasText: /^15oz$/ }).click();
   await e.click('button:has-text("Elegir este regalo")');
   await e.click('button:has-text("Sí, confirmar")');
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   await e.waitForSelector(`text=Taza E2E ${run}`);
   await e.waitForSelector("text=Color: Red, Size: 15oz");
-  ok("selection changed to the mug (Red / 15oz); only offered colours were shown");
+  const doneImg = await e.locator("main img").first().getAttribute("src");
+  assert(doneImg === mainAfter, "confirmation page shows the Red photo");
+  ok("selection changed to the mug (Red / 15oz); only offered colours were shown; Red photo on the confirmation page");
 
   section("Admin stops offering Red -> employee must re-pick a colour");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/items`);
@@ -279,9 +329,12 @@ try {
   assert((await group.count()) === 1, "grouped row shows 1 hoodie to order");
   assert((await group.locator("text=Size: L").count()) === 1, "grouped row shows the chosen size");
   assert((await a.locator("tr", { hasText: "Company Hoodie" }).first().locator('a:has-text("Open")').count()) === 1, "Amazon link present in grouped row");
+  await group.locator('input[name="unitCost"]').fill("57.50");
   await group.locator('button:has-text("Mark 1 ordered")').click();
   await a.waitForSelector("text=Mark 1 received");
-  ok("bulk 'mark ordered' worked");
+  await a.waitForSelector("text=/Price updated from 55.00 to 57.50/");
+  assert((await a.locator("tr", { hasText: "Company Hoodie" }).first().locator("text=$57.50").count()) >= 1, "grouped row now shows the confirmed price");
+  ok("marked ordered at the confirmed price; gift re-priced everywhere");
   await shot(a, "orders");
   const row = a.locator("tr", { hasText: `E2E${run}1` });
   await row.locator('button:has-text("Mark received")').click();
@@ -334,22 +387,25 @@ try {
 
   section("Budget tab totals");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/budget`);
-  await a.waitForSelector("text=$55.00");
+  await a.waitForSelector("text=$57.50");
   assert((await a.locator("text=$1,000.00").count()) >= 1, "total budget shown");
-  ok("committed spend $55.00 of $1,000.00");
+  ok("committed spend $57.50 of $1,000.00 (uses the confirmed price)");
+  await a.goto(`${BASE}/admin/items?q=Company+Hoodie`);
+  await a.locator("tr", { hasText: "Company Hoodie" }).locator("a").first().click();
+  await a.waitForSelector("text=Price history");
+  assert((await a.locator("tr", { hasText: "Confirmed at order time" }).filter({ hasText: "$57.50" }).count()) >= 1, "price history shows the order-time change");
+  ok("price history recorded on the gift");
   await shot(a, "budget");
 
-  section("HR email (console mode) with Excel + CSV attachments");
-  await a.goto(`${BASE}/admin/campaigns/${campaignId}/emails`);
-  await a.click('button:has-text("Send order list now")');
-  await a.waitForSelector("text=/selection\\(s\\) included/");
-  await a.goto(`${BASE}/admin/campaigns/${campaignId}/emails`);
-  await a.waitForSelector("text=Gift orders:");
-  const logRow = a.locator("tbody tr", { hasText: "Gift orders:" }).first();
-  const attachments = await logRow.locator("td").nth(3).innerText();
-  assert(attachments.includes(".xlsx") && attachments.includes("summary") && attachments.includes("detail"), `attachments listed (${attachments})`);
-  ok("email logged with orders.xlsx and both CSVs attached");
-  await shot(a, "emails");
+  section("Webhook received the order events");
+  const events = received.map((r) => r.event);
+  assert(events.includes("selection.created") || events.includes("selection.changed"), `pick events delivered (${events.join(", ")})`);
+  assert(events.includes("selection.status_changed"), "status change events delivered");
+  assert(events.includes("selection.needs_repick"), "re-pick events delivered");
+  assert(events.includes("item.price_updated"), "price update event delivered");
+  const statusEvt = received.find((r) => r.event === "selection.status_changed" && r.body.newStatus === "COLLECTED");
+  assert(statusEvt && statusEvt.body.selections[0].confirmationCode === code, "collected event carries the employee's confirmation code");
+  ok(`webhook delivered ${received.length} events covering the whole flow`);
 
   section("Excel export: workbook parses and contains the hoodie order");
   const xlsx = await a.request.get(`${BASE}/api/export/${campaignId}?type=xlsx`);
@@ -368,9 +424,14 @@ try {
   assert(notPicked.rowCount === 3, `Not picked lists the 2 remaining employees (rows=${notPicked.rowCount})`);
   ok("workbook has all sheets, the hoodie line and the not-picked list");
 
-  section("Live spreadsheet feed works without a login");
+  section("Live spreadsheet feeds work without a login");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/exports`);
   const feedUrl = await a.locator("input[readonly]").first().inputValue();
   const anon = await browser.newContext();
+  const allFeed = await anon.request.get(globalFeed.replace(/^https?:\/\/[^/]+/, BASE));
+  assert(allFeed.ok() && (allFeed.headers()["content-type"] ?? "").includes("spreadsheetml"), "all-campaigns xlsx feed served");
+  const allCsv = await anon.request.get(globalFeed.replace(/^https?:\/\/[^/]+/, BASE) + "?format=csv");
+  assert(allCsv.ok() && (await allCsv.text()).startsWith("Campaign,"), "all-campaigns csv feed has a Campaign column");
   const feed = await anon.request.get(feedUrl.replace(/^https?:\/\/[^/]+/, BASE));
   assert(feed.ok() && (feed.headers()["content-type"] ?? "").includes("spreadsheetml"), "feed xlsx served anonymously with the token");
   const feedCsv = await anon.request.get(feedUrl.replace(/^https?:\/\/[^/]+/, BASE) + "?format=csv");
@@ -379,15 +440,8 @@ try {
   assert(bad.status() === 404, "bad token rejected");
   const noAuth = await anon.request.get(`${BASE}/api/export/${campaignId}?type=xlsx`);
   assert(noAuth.status() === 401, "admin export rejected without login");
-  ok("feed token works; admin export requires login");
+  ok("campaign and all-campaign feed links work; admin export requires login");
   await anon.close();
-
-  section("Scheduled digest endpoint");
-  const cronBad = await a.request.get(`${BASE}/api/cron/digest`);
-  assert(cronBad.status() === 401, "digest requires the secret");
-  const cron = await a.request.get(`${BASE}/api/cron/digest`, { headers: { authorization: `Bearer ${CRON_SECRET}` } });
-  assert(cron.ok(), "digest runs with the secret");
-  ok(`digest endpoint ok: ${JSON.stringify((await cron.json()).results.length)} campaign(s) considered`);
 
   section("Catalog import: download the template, add a row, upload it back");
   const tplRes = await a.request.get(`${BASE}/api/items/template?format=xlsx`);
@@ -468,6 +522,7 @@ try {
   await a.waitForURL(/\/admin\/login/);
   ok("signed out; admin pages redirect to login");
 
+  receiver.close();
   console.log(`\nAll ${step} sections passed. Screenshots in ${SHOTS}`);
   await emp.close();
   await admin.close();

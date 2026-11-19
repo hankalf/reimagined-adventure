@@ -3,7 +3,7 @@ import { Alert, StatusBadge } from "@/components/ui";
 import { PageHeader, Stat } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
-import { fmtDate, money } from "@/lib/utils";
+import { money } from "@/lib/utils";
 
 export default async function DashboardPage({ searchParams }: PageProps<"/admin">) {
   const sp = await searchParams;
@@ -99,7 +99,6 @@ export default async function DashboardPage({ searchParams }: PageProps<"/admin"
                   <div className="rounded bg-teal-50 py-1 text-teal-800">{r.counts.received} received</div>
                   <div className="rounded bg-emerald-50 py-1 text-emerald-800">{r.counts.collected} collected</div>
                 </div>
-                {r.campaign.lastHrEmailAt && <p className="mt-3 text-xs text-slate-500">Last HR email: {fmtDate(r.campaign.lastHrEmailAt, true)}</p>}
               </Link>
             );
           })}

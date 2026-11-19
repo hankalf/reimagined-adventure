@@ -35,6 +35,18 @@ describe("mapItemRows", () => {
     expect(res.errors.join("\n")).toMatch(/duplicate/);
     expect(mapItemRows([["foo", "bar"], ["a", "b"]]).errors[0]).toMatch(/"name" column/);
   });
+  it("reads multiple image links and per-colour photos", () => {
+    const res = mapItemRows([
+      ["name", "image_url", "color_images"],
+      ["Tumbler", "https://x/1.jpg | https://x/2.jpg", "Teal=https://x/teal.jpg | Rose=https://x/rose.jpg | bad"],
+    ]);
+    expect(res.rows[0].imageUrls).toEqual(["https://x/1.jpg", "https://x/2.jpg"]);
+    expect(res.rows[0].colorImages).toEqual([
+      { value: "Teal", url: "https://x/teal.jpg" },
+      { value: "Rose", url: "https://x/rose.jpg" },
+    ]);
+    expect(res.errors.join(" ")).toMatch(/color_images entry "bad"/);
+  });
   it("uses option2 columns alone as group 1 and labels unnamed groups", () => {
     const res = mapItemRows([["name", "option2_values"], ["Thing", "A, B"]]);
     expect(res.rows[0]).toMatchObject({ option1Label: "Option", option1Values: ["A", "B"], option2Label: null, option2Values: [] });
@@ -48,6 +60,7 @@ describe("parseItemFile", () => {
     expect(res.errors).toEqual([]);
     expect(res.rows).toHaveLength(2);
     expect(res.rows[0].asin).toBe("B0CHWRXH8B");
+    expect(res.rows[0].imageUrls).toHaveLength(2);
   });
   it("reads csv", async () => {
     const csv = Papa.unparse(templateRows());

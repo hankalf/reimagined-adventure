@@ -7,6 +7,7 @@ import { parseScanPayload } from "@/lib/kiosk";
 import { employeeNumberCandidates } from "@/lib/selection-rules";
 import { dec } from "@/lib/utils";
 import { optionDetail, optionSummary } from "@/lib/options";
+import { notifySelections } from "@/lib/webhook";
 
 export type KioskSelection = {
   id: string;
@@ -20,6 +21,7 @@ export type KioskSelection = {
   optionDetail: string;
   imageId: string | null;
   imageUrl: string | null;
+  thumbFit: string;
   status: string;
   code: string;
   cost: number | null;
@@ -45,8 +47,9 @@ function serialize(s: {
   receivedAt: Date | null;
   collectedAt: Date | null;
   employee: { employeeNumber: string; firstName: string; lastName: string; department: string | null };
-  item: { name: string; nameEs: string | null; option1Label: string | null; option2Label: string | null; imageId: string | null; imageUrl: string | null };
+  item: { name: string; nameEs: string | null; option1Label: string | null; option2Label: string | null; imageId: string | null; imageUrl: string | null; thumbFit: string; images?: Array<{ imageId: string; option1Value: string | null }> };
 }): KioskSelection {
+  const colourPhoto = s.option1Value ? s.item.images?.find((g) => g.option1Value === s.option1Value) : undefined;
   return {
     id: s.id,
     employeeNumber: s.employee.employeeNumber,
@@ -57,8 +60,9 @@ function serialize(s: {
     itemNameEs: s.item.nameEs,
     optionText: optionSummary(s),
     optionDetail: optionDetail(s.item, s),
-    imageId: s.item.imageId,
+    imageId: colourPhoto?.imageId ?? s.item.imageId,
     imageUrl: s.item.imageUrl,
+    thumbFit: s.item.thumbFit,
     status: s.status,
     code: s.confirmationCode,
     cost: dec(s.costAtSelection),
@@ -67,7 +71,7 @@ function serialize(s: {
   };
 }
 
-const include = { employee: true, item: true } as const;
+const include = { employee: true, item: { include: { images: true } } } as const;
 
 export async function kioskStatsAction(campaignId: string): Promise<KioskStats> {
   await requireAdmin();
@@ -150,6 +154,7 @@ export async function kioskCollectAction(campaignId: string, selectionId: string
     include,
   });
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "selection.status.collected", entityType: "Selection", entityId: sel.id, meta: { via: "kiosk", previousStatus: sel.status } });
+  await notifySelections("selection.status_changed", [sel.id], { newStatus: "COLLECTED", via: "kiosk" });
   return { ok: true, selection: serialize(updated), stats: await kioskStatsAction(campaignId) };
 }
 
@@ -159,5 +164,6 @@ export async function kioskUndoAction(campaignId: string, selectionId: string): 
   if (!sel || sel.status !== "COLLECTED") return { ok: false, error: "Nothing to undo.", stats: await kioskStatsAction(campaignId) };
   const updated = await db.selection.update({ where: { id: sel.id }, data: { status: "RECEIVED", collectedAt: null }, include });
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "selection.status.received", entityType: "Selection", entityId: sel.id, meta: { via: "kiosk-undo" } });
+  await notifySelections("selection.status_changed", [sel.id], { newStatus: "RECEIVED", via: "kiosk-undo" });
   return { ok: true, selection: serialize(updated), stats: await kioskStatsAction(campaignId) };
 }

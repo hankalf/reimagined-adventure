@@ -179,3 +179,91 @@ export async function buildOrdersWorkbook(data: ReportData, opts: { onlyNew?: bo
   const out = await wb.xlsx.writeBuffer();
   return Buffer.from(out as ArrayBuffer);
 }
+
+/** One workbook with every campaign's selections (Orders sheet) plus a per-campaign Summary sheet. */
+export async function buildAllOrdersWorkbook(reports: ReportData[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Employee Gift Portal";
+  const orders = wb.addWorksheet("Orders");
+  orders.columns = [
+    { header: "Campaign", key: "campaign", width: 24 },
+    { header: "Employee number", key: "num", width: 16 },
+    { header: "First name", key: "first", width: 16 },
+    { header: "Last name", key: "last", width: 18 },
+    { header: "Department", key: "dept", width: 18 },
+    { header: "Gift", key: "item", width: 40 },
+    { header: "Type", key: "type", width: 10 },
+    { header: "Options", key: "option", width: 24 },
+    { header: "Cost", key: "cost", width: 12, style: { numFmt: currencyFormat(reports[0]?.campaign.currency ?? "USD") } },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Confirmation", key: "code", width: 13 },
+    { header: "Selected at", key: "selectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Ordered at", key: "orderedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Received at", key: "receivedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Collected at", key: "collectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Product link", key: "link", width: 44 },
+  ];
+  for (const data of reports) {
+    for (const r of data.detail) {
+      const row = orders.addRow({
+        campaign: data.campaign.name,
+        num: r.employeeNumber,
+        first: r.firstName,
+        last: r.lastName,
+        dept: r.department ?? "",
+        item: r.itemName,
+        type: r.itemType === "CUSTOM" ? "Custom" : "Product",
+        option: r.optionDetail,
+        cost: r.cost,
+        status: SELECTION_STATUS_LABEL[r.status] ?? r.status,
+        code: r.confirmationCode,
+        selectedAt: r.selectedAt,
+        orderedAt: r.orderedAt,
+        receivedAt: r.receivedAt,
+        collectedAt: r.collectedAt,
+        link: r.productUrl ?? "",
+      });
+      if (r.productUrl) row.getCell("link").value = { text: r.productUrl, hyperlink: r.productUrl };
+    }
+  }
+  styleHeader(orders);
+
+  const summary = wb.addWorksheet("Summary");
+  summary.columns = [
+    { header: "Campaign", key: "campaign", width: 24 },
+    { header: "Item", key: "name", width: 40 },
+    { header: "Type", key: "type", width: 10 },
+    { header: "Options", key: "option", width: 24 },
+    { header: "Quantity", key: "qty", width: 10 },
+    { header: "Unit cost", key: "unit", width: 12 },
+    { header: "Subtotal", key: "subtotal", width: 12 },
+    { header: "To order", key: "toOrder", width: 10 },
+    { header: "Ordered", key: "ordered", width: 10 },
+    { header: "Received", key: "received", width: 10 },
+    { header: "Collected", key: "collected", width: 10 },
+    { header: "ASIN", key: "asin", width: 13 },
+    { header: "Product link", key: "link", width: 44 },
+  ];
+  for (const data of reports) {
+    for (const r of data.summary) {
+      summary.addRow({
+        campaign: data.campaign.name,
+        name: r.name,
+        type: r.type === "CUSTOM" ? "Custom" : "Product",
+        option: r.optionDetail,
+        qty: r.quantity,
+        unit: r.unitCost,
+        subtotal: r.subtotal,
+        toOrder: r.byStatus.SELECTED ?? 0,
+        ordered: r.byStatus.ORDERED ?? 0,
+        received: r.byStatus.RECEIVED ?? 0,
+        collected: r.byStatus.COLLECTED ?? 0,
+        asin: r.asin ?? "",
+        link: r.productUrl ?? "",
+      });
+    }
+  }
+  styleHeader(summary);
+  const out = await wb.xlsx.writeBuffer();
+  return Buffer.from(out as ArrayBuffer);
+}

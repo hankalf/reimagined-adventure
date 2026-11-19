@@ -2,8 +2,7 @@ import "server-only";
 import { db } from "./db";
 import { COMMITTED_STATUSES, employeeBudget, isOverBudget, summarizeBudget, type BudgetTotals } from "./budget";
 import { toCsv } from "./csv";
-import { escapeHtml, emailShell } from "./email";
-import { dec, money, fmtDate, SELECTION_STATUS_LABEL } from "./utils";
+import { dec, SELECTION_STATUS_LABEL } from "./utils";
 import { optionDetail, optionKey, optionSummary } from "./options";
 
 export type ReportSummaryRow = {
@@ -76,8 +75,6 @@ export type ReportData = {
     currency: string;
     totalBudget: number | null;
     defaultEmployeeBudget: number | null;
-    hrEmails: string[];
-    lastHrEmailAt: Date | null;
   };
   generatedAt: Date;
   since: Date | null;
@@ -222,8 +219,6 @@ export async function buildReportData(campaignId: string, opts: { since?: Date |
       currency: campaign.currency,
       totalBudget: dec(campaign.totalBudget),
       defaultEmployeeBudget: dec(campaign.defaultEmployeeBudget),
-      hrEmails: campaign.hrEmails,
-      lastHrEmailAt: campaign.lastHrEmailAt,
     },
     generatedAt: new Date(),
     since,
@@ -279,87 +274,4 @@ export function budgetCsv(data: ReportData): string {
     ["Employee number", "First name", "Last name", "Department", "Budget", "Gift", "Cost", "Remaining", "Over budget", "Status"],
     ...data.employeeBudgets.map((r) => [r.employeeNumber, r.firstName, r.lastName, r.department ?? "", r.budget ?? "", r.itemName ?? "", r.cost ?? "", r.remaining ?? "", r.overBudget ? "Yes" : "", r.status ? SELECTION_STATUS_LABEL[r.status] ?? r.status : "Not picked"]),
   ]);
-}
-
-// ---------- HR email HTML ----------
-
-const td = (v: string | number, align: "left" | "right" = "left") => `<td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:${align};font-size:13px">${typeof v === "number" ? v : v}</td>`;
-const th = (v: string, align: "left" | "right" = "left") => `<th style="padding:6px 8px;border-bottom:2px solid #d1d5db;text-align:${align};font-size:12px;color:#374151;text-transform:uppercase;letter-spacing:.03em">${escapeHtml(v)}</th>`;
-
-export function renderHrEmail(data: ReportData, opts: { appUrl: string; onlyNew: boolean }): { subject: string; html: string } {
-  const cur = data.campaign.currency;
-  const summary = data.summary.filter((r) => !opts.onlyNew || r.newQuantity > 0);
-  const products = summary.filter((r) => r.type === "PRODUCT");
-  const customs = summary.filter((r) => r.type === "CUSTOM");
-  const detail = data.detail.filter((r) => r.status !== "NEEDS_REPICK" && (!opts.onlyNew || r.isNew));
-  const qty = (r: ReportSummaryRow) => (opts.onlyNew ? r.newQuantity : r.quantity);
-  const total = summary.reduce((acc, r) => acc + (r.unitCost !== null ? r.unitCost * qty(r) : 0), 0);
-  const ordersUrl = `${opts.appUrl}/admin/campaigns/${data.campaign.id}/orders`;
-
-  const subject = opts.onlyNew
-    ? `Gift orders: ${data.campaign.name} — ${detail.length} new selection${detail.length === 1 ? "" : "s"}`
-    : `Gift orders: ${data.campaign.name} — ${data.counts.picked} selection${data.counts.picked === 1 ? "" : "s"} to date`;
-
-  const statsHtml = `
-<table style="border-collapse:collapse;margin:0 0 20px"><tr>
-${[
-  ["Eligible", data.counts.eligible],
-  ["Picked", data.counts.picked],
-  ["Not picked", data.counts.notPicked],
-  ["To order", data.counts.toOrder],
-  ["Ordered", data.counts.ordered],
-  ["Received", data.counts.received],
-  ["Collected", data.counts.collected],
-  ["Need re-pick", data.counts.needsRepick],
-]
-  .map(([label, n]) => `<td style="padding:8px 14px;background:#f9fafb;border:1px solid #e5e7eb;text-align:center"><div style="font-size:20px;font-weight:700">${n}</div><div style="font-size:11px;color:#6b7280;text-transform:uppercase">${label}</div></td>`)
-  .join("")}
-</tr></table>`;
-
-  const budgetLine = data.budget.totalBudget !== null
-    ? `<p style="margin:0 0 18px;font-size:14px">Budget: <strong>${money(data.budget.committed, cur)}</strong> committed of <strong>${money(data.budget.totalBudget, cur)}</strong> (${money(data.budget.remaining, cur)} remaining). Ordered so far: ${money(data.budget.ordered, cur)}.</p>`
-    : `<p style="margin:0 0 18px;font-size:14px">Committed spend: <strong>${money(data.budget.committed, cur)}</strong>. Ordered so far: ${money(data.budget.ordered, cur)}.</p>`;
-
-  const productTable = products.length === 0
-    ? `<p style="font-size:14px;color:#6b7280">No product orders${opts.onlyNew ? " since the last email" : ""}.</p>`
-    : `<table style="border-collapse:collapse;width:100%;margin-bottom:24px"><thead><tr>${th("Item")}${th("Options")}${th("Qty", "right")}${th("Unit cost", "right")}${th("Subtotal", "right")}${th("Link")}</tr></thead><tbody>
-${products
-  .map(
-    (r) => `<tr>${td(escapeHtml(r.name))}${td(escapeHtml(r.optionDetail || "—"))}${td(qty(r), "right")}${td(money(r.unitCost, cur), "right")}${td(r.unitCost !== null ? money(r.unitCost * qty(r), cur) : "—", "right")}${td(r.productUrl ? `<a href="${escapeHtml(r.productUrl)}" style="color:#1d4ed8">Open${r.asin ? ` (${escapeHtml(r.asin)})` : ""}</a>` : "—")}</tr>`,
-  )
-  .join("")}
-<tr>${td("<strong>Total</strong>")}${td("")}${td(`<strong>${products.reduce((a, r) => a + qty(r), 0)}</strong>`, "right")}${td("")}${td(`<strong>${money(products.reduce((a, r) => a + (r.unitCost ?? 0) * qty(r), 0), cur)}</strong>`, "right")}${td("")}</tr>
-</tbody></table>`;
-
-  const customTable = customs.length === 0
-    ? ""
-    : `<h2 style="font-size:16px;margin:8px 0 10px">Custom gifts to fulfil internally</h2>
-<table style="border-collapse:collapse;width:100%;margin-bottom:24px"><thead><tr>${th("Gift")}${th("Options")}${th("Qty", "right")}${th("Internal cost", "right")}${th("How to fulfil")}</tr></thead><tbody>
-${customs.map((r) => `<tr>${td(escapeHtml(r.name))}${td(escapeHtml(r.optionDetail || "—"))}${td(qty(r), "right")}${td(money(r.unitCost, cur), "right")}${td(escapeHtml(r.fulfillmentNote ?? "—"))}</tr>`).join("")}
-</tbody></table>`;
-
-  const detailRows = detail.slice(0, 400);
-  const detailTable = `<h2 style="font-size:16px;margin:8px 0 10px">Per employee${opts.onlyNew ? " (new)" : ""}</h2>
-<table style="border-collapse:collapse;width:100%"><thead><tr>${th("Employee #")}${th("Name")}${th("Dept")}${th("Gift")}${th("Options")}${th("Cost", "right")}${th("Status")}${th("Code")}</tr></thead><tbody>
-${detailRows
-  .map(
-    (r) => `<tr>${td(escapeHtml(r.employeeNumber))}${td(escapeHtml(`${r.firstName} ${r.lastName}`.trim()))}${td(escapeHtml(r.department ?? ""))}${td(escapeHtml(r.itemName))}${td(escapeHtml(r.optionText || "—"))}${td(money(r.cost, cur), "right")}${td(SELECTION_STATUS_LABEL[r.status] ?? r.status)}${td(r.confirmationCode)}</tr>`,
-  )
-  .join("")}
-</tbody></table>
-${detail.length > detailRows.length ? `<p style="font-size:12px;color:#6b7280">Showing ${detailRows.length} of ${detail.length} rows. The attached spreadsheet has the full list.</p>` : ""}`;
-
-  const html = emailShell(
-    `${data.campaign.name}: gift orders`,
-    `<p style="margin:0 0 14px;font-size:14px">Generated ${fmtDate(data.generatedAt, true)}${opts.onlyNew && data.since ? `, showing selections since ${fmtDate(data.since, true)}` : ""}. Grand total for this list: <strong>${money(total, cur)}</strong>.</p>
-${statsHtml}
-${budgetLine}
-<h2 style="font-size:16px;margin:8px 0 10px">Items to order</h2>
-${productTable}
-${customTable}
-${detailTable}
-<p style="margin-top:24px;font-size:14px"><a href="${ordersUrl}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open the orders list to mark items ordered</a></p>
-<p style="font-size:13px;color:#6b7280">Attached: orders.xlsx (Summary, Detail, Budget, Not picked), orders-summary.csv, orders-detail.csv.</p>`,
-  );
-  return { subject, html };
 }

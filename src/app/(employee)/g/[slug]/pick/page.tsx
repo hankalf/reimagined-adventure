@@ -36,7 +36,7 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
         <div>
           <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">{fill(t.pick.greeting, { name: ctx.employee.firstName })}</h1>
           <p className="mt-1 text-slate-600">{t.pick.chooseOne}</p>
-          {ctx.budget !== null && ctx.budget > 0 && (
+          {campaign.showBudgetToEmployees && ctx.budget !== null && ctx.budget > 0 && (
             <p className="mt-1 text-sm font-medium text-slate-700">{fill(t.pick.yourBudget, { amount: formatMoney(ctx.budget, campaign.currency, lang) })}</p>
           )}
         </div>
@@ -49,7 +49,6 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
         lang={lang}
         t={t}
         items={ctx.items}
-        currency={campaign.currency}
         currentItemId={ctx.selection?.itemId ?? null}
         allowChange={campaign.allowChangeUntilOrdered}
       />

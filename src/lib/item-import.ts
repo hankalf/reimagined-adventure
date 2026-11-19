@@ -34,7 +34,8 @@ export const ITEM_IMPORT_COLUMNS: ItemImportColumn[] = [
   { key: "option2_values", header: "option2_values", aliases: ["option 2 values", "option2 values"], description: "Values for the second group, e.g. S, M, L, XL.", example1: "", example2: "" },
   { key: "colors", header: "colors", aliases: ["colours", "color", "colour"], description: "Shortcut: fills option group 1 with label Color (ignored when option1_values is given).", example1: "", example2: "" },
   { key: "sizes", header: "sizes", aliases: ["size"], description: "Shortcut: fills the next free option group with label Size.", example1: "", example2: "" },
-  { key: "image_url", header: "image_url", aliases: ["image", "photo", "picture", "image link", "photo url"], description: "Link to a product photo. The importer can download it so the thumbnail is stored in the portal.", example1: "https://m.media-amazon.com/images/I/example.jpg", example2: "" },
+  { key: "image_url", header: "image_url", aliases: ["image", "photo", "picture", "image link", "photo url", "images", "photos"], description: "Link(s) to product photos, separated by |. The first becomes the main picture; the rest go in the gallery. The importer can download them.", example1: "https://m.media-amazon.com/images/I/example.jpg | https://m.media-amazon.com/images/I/example-2.jpg", example2: "" },
+  { key: "color_images", header: "color_images", aliases: ["colour images", "color photos", "colour photos", "option images"], description: "A photo per colour (option group 1 value): Value=link | Value=link, e.g. Teal=https://… | Rose=https://…", example1: "", example2: "" },
   { key: "fulfillment_note", header: "fulfillment_note", aliases: ["fulfilment note", "fulfillment", "how to fulfil", "hr note", "note"], description: "Custom gifts only: how HR fulfils it (shown to HR, never to employees).", example1: "", example2: "HR adds 4 hours of PTO in payroll and emails the manager." },
   { key: "active", header: "active", aliases: ["enabled", "status"], description: "yes/no. Inactive gifts are kept in the catalog but hidden. Default: yes.", example1: "yes", example2: "yes" },
 ];
@@ -55,7 +56,10 @@ export type ItemImportRow = {
   option1Values: string[];
   option2Label: string | null;
   option2Values: string[];
-  imageUrl: string | null;
+  /** First = main picture, rest = gallery. */
+  imageUrls: string[];
+  /** Photo per option-1 value. */
+  colorImages: Array<{ value: string; url: string }>;
   fulfillmentNote: string | null;
   active: boolean;
   matchBy: { kind: "asin" | "sku" | "name"; value: string };
@@ -181,10 +185,25 @@ export function mapItemRows(table: string[][]): ItemImportResult {
     }
     seenKeys.add(dedupeKey);
 
-    let imageUrl: string | null = cell("image_url") || null;
-    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
-      errors.push(`Row ${rowNumber}: image_url must start with http(s)://; ignored.`);
-      imageUrl = null;
+    const imageUrls: string[] = [];
+    for (const raw of cell("image_url").split(/[|\n]/)) {
+      const u = raw.trim();
+      if (!u) continue;
+      if (/^https?:\/\//i.test(u)) imageUrls.push(u);
+      else errors.push(`Row ${rowNumber}: image link "${u}" must start with http(s)://; ignored.`);
+    }
+    const colorImages: Array<{ value: string; url: string }> = [];
+    for (const raw of cell("color_images").split(/[|\n]/)) {
+      const part = raw.trim();
+      if (!part) continue;
+      const eq = part.indexOf("=");
+      const value = eq > 0 ? part.slice(0, eq).trim() : "";
+      const url = eq > 0 ? part.slice(eq + 1).trim() : "";
+      if (!value || !/^https?:\/\//i.test(url)) {
+        errors.push(`Row ${rowNumber}: color_images entry "${part}" must look like Value=https://…; ignored.`);
+        continue;
+      }
+      colorImages.push({ value, url });
     }
 
     rows.push({
@@ -203,7 +222,8 @@ export function mapItemRows(table: string[][]): ItemImportResult {
       option1Values,
       option2Label,
       option2Values,
-      imageUrl,
+      imageUrls,
+      colorImages,
       fulfillmentNote: cell("fulfillment_note") || null,
       active: cell("active") ? truthy(cell("active")) : true,
       matchBy,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { imageSrc } from "@/lib/image-src";
+import { ItemThumb } from "@/components/item-thumb";
 import { fmtDate, SELECTION_STATUS_LABEL } from "@/lib/utils";
 import { kioskCollectAction, kioskLookupAction, kioskSelectionByIdAction, kioskUndoAction, type KioskLookup, type KioskSelection, type KioskStats } from "./actions";
 import { Scanner } from "./scanner";
@@ -289,14 +290,7 @@ function ResultCard({ selection, pending, onCollect, onUndo, onCancel }: { selec
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800">
       <div className="grid gap-4 p-5 sm:grid-cols-[160px_1fr]">
-        <div className="aspect-square overflow-hidden rounded-xl bg-slate-700">
-          {src ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-5xl">🎁</div>
-          )}
-        </div>
+        <ItemThumb src={src} framing={{ thumbFit: selection.thumbFit }} className="rounded-xl" loading="eager" />
         <div>
           <h2 className="text-3xl font-bold">
             {selection.firstName} {selection.lastName}

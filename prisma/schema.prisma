@@ -110,6 +110,8 @@ model Campaign {
   totalBudget           Decimal? @db.Decimal(12, 2)
   defaultEmployeeBudget Decimal? @db.Decimal(12, 2)
   hideItemsOverBudget   Boolean  @default(false)
+  /// Employees never see item prices; this only controls the "Your gift budget: $X" line.
+  showBudgetToEmployees Boolean  @default(false)
   currency              String   @default("USD")
 
   // Holiday mascot (dancing elf with an uploaded face)
@@ -164,11 +166,49 @@ model Item {
   option1Values   String[]       @default([])
   option2Label    String?
   option2Values   String[]       @default([])
+  /// Thumbnail framing: "contain" shows the whole photo in the square, "cover" fills it; zoom 100-250; focal point in %.
+  thumbFit        String         @default("contain")
+  thumbZoom       Int            @default(100)
+  thumbFocusX     Int            @default(50)
+  thumbFocusY     Int            @default(50)
   active          Boolean        @default(true)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   campaigns       CampaignItem[]
   selections      Selection[]
+  images          ItemImage[]
+  priceHistory    ItemPriceHistory[]
+}
+
+/// Every change to a gift's unit cost: edited in the catalog, imported, or corrected by HR when placing the order.
+model ItemPriceHistory {
+  id            String   @id @default(cuid())
+  itemId        String
+  campaignId    String?
+  oldPrice      Decimal? @db.Decimal(12, 2)
+  newPrice      Decimal  @db.Decimal(12, 2)
+  source        String
+  note          String?
+  changedById   String?
+  changedByName String?
+  createdAt     DateTime @default(now())
+  item          Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, createdAt])
+}
+
+/// Extra photos for a gift. `option1Value` ties a photo to a value of the first option group (e.g. Color: Red),
+/// so the employee sees that photo when they pick the colour; null = general gallery photo.
+model ItemImage {
+  id           String   @id @default(cuid())
+  itemId       String
+  imageId      String
+  option1Value String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  item         Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, option1Value])
 }
 
 model CampaignItem {

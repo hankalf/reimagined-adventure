@@ -1,7 +1,6 @@
 import { db } from "./db";
 
 export const SETTING_KEYS = {
-  defaultHrEmails: "default_hr_emails",
   companyName: "company_name",
 } as const;
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { fill, formatMoney, localized, type Lang } from "@/i18n";
+import { fill, localized, type Lang } from "@/i18n";
 import type { Dictionary } from "@/i18n/en";
 import { imageSrc } from "@/lib/image-src";
+import { ItemThumb } from "@/components/item-thumb";
 import type { PickItem } from "@/lib/selection";
 import { chooseAction, type ChooseState } from "../actions";
 
@@ -12,30 +13,69 @@ type Props = {
   lang: Lang;
   t: Dictionary;
   items: PickItem[];
-  currency: string;
   currentItemId: string | null;
   allowChange: boolean;
 };
 
-export function GiftGrid({ slug, lang, t, items, currency, currentItemId, allowChange }: Props) {
+export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("");
   const [open, setOpen] = useState<PickItem | null>(null);
 
-  const categories = useMemo(() => [...new Set(items.map((i) => i.category).filter((c): c is string => Boolean(c)))].sort(), [items]);
+  // Categories in the order they first appear (admins control item order); uncategorised gifts go last.
+  const categories = useMemo(() => {
+    const seen: string[] = [];
+    for (const i of items) if (i.category && !seen.includes(i.category)) seen.push(i.category);
+    return seen;
+  }, [items]);
+  const hasUncategorized = items.some((i) => !i.category);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((i) => {
-      if (category && i.category !== category) return false;
+      if (category && (i.category ?? "__none__") !== category) return false;
       if (!q) return true;
       const name = `${i.name} ${i.nameEs ?? ""} ${i.description} ${i.descriptionEs ?? ""} ${i.category ?? ""}`.toLowerCase();
       return name.includes(q);
     });
   }, [items, query, category]);
+  // "All gifts" view groups the list under category headings.
+  const sections = useMemo(() => {
+    if (category || categories.length === 0) return [{ key: category || "all", title: null as string | null, items: visible }];
+    const out: Array<{ key: string; title: string | null; items: PickItem[] }> = [];
+    for (const c of categories) {
+      const list = visible.filter((i) => i.category === c);
+      if (list.length > 0) out.push({ key: c, title: c, items: list });
+    }
+    const rest = visible.filter((i) => !i.category);
+    if (rest.length > 0) out.push({ key: "__none__", title: t.pick.uncategorized, items: rest });
+    return out;
+  }, [category, categories, visible, t.pick.uncategorized]);
+
+  const pill = (active: boolean) =>
+    `whitespace-nowrap rounded-full border px-4 py-1.5 text-sm font-medium transition ${active ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"}`;
 
   return (
     <div>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+      {categories.length > 0 && (
+        <div className="-mx-4 mb-4 overflow-x-auto px-4" role="tablist" aria-label={t.pick.allCategories}>
+          <div className="flex gap-2">
+            <button type="button" role="tab" aria-selected={category === ""} onClick={() => setCategory("")} className={pill(category === "")}>
+              {t.pick.allCategories}
+            </button>
+            {categories.map((c) => (
+              <button key={c} type="button" role="tab" aria-selected={category === c} onClick={() => setCategory(c)} className={pill(category === c)}>
+                {c}
+              </button>
+            ))}
+            {hasUncategorized && (
+              <button type="button" role="tab" aria-selected={category === "__none__"} onClick={() => setCategory("__none__")} className={pill(category === "__none__")}>
+                {t.pick.uncategorized}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <div className="mb-5">
         <input
           type="search"
           value={query}
@@ -44,23 +84,16 @@ export function GiftGrid({ slug, lang, t, items, currency, currentItemId, allowC
           className="input sm:max-w-xs"
           aria-label={t.pick.search}
         />
-        {categories.length > 1 && (
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="input sm:max-w-xs" aria-label={t.pick.allCategories}>
-            <option value="">{t.pick.allCategories}</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
 
       {visible.length === 0 ? (
         <p className="py-12 text-center text-slate-500">{t.pick.noResults}</p>
       ) : (
+        sections.map((section) => (
+        <section key={section.key} className="mb-8">
+          {section.title && <h2 className="mb-3 text-lg font-semibold text-slate-900">{section.title}</h2>}
         <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {visible.map((item) => {
+          {section.items.map((item) => {
             const src = imageSrc(item, true);
             const disabled = !item.available || item.overBudget;
             const name = localized(lang, item.name, item.nameEs);
@@ -74,13 +107,8 @@ export function GiftGrid({ slug, lang, t, items, currency, currentItemId, allowC
                   } ${disabled ? "opacity-70" : ""}`}
                   aria-label={`${t.pick.viewDetails}: ${name}`}
                 >
-                  <div className="relative aspect-square w-full bg-slate-100">
-                    {src ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={src} alt={name} loading="lazy" className={`h-full w-full object-cover ${disabled ? "grayscale" : ""}`} />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-5xl">🎁</div>
-                    )}
+                  <div className="relative w-full">
+                    <ItemThumb src={src} alt={name} framing={item.framing} imgClassName={disabled ? "grayscale" : ""} />
                     <div className="absolute left-2 top-2 flex flex-col gap-1">
                       {item.type === "CUSTOM" && <span className="badge bg-emerald-600 text-white">{t.pick.perk}</span>}
                       {item.soldOut && <span className="badge bg-slate-800 text-white">{t.pick.soldOut}</span>}
@@ -99,6 +127,8 @@ export function GiftGrid({ slug, lang, t, items, currency, currentItemId, allowC
             );
           })}
         </ul>
+        </section>
+        ))
       )}
 
       {open && (
@@ -107,7 +137,6 @@ export function GiftGrid({ slug, lang, t, items, currency, currentItemId, allowC
           slug={slug}
           lang={lang}
           t={t}
-          currency={currency}
           allowChange={allowChange}
           onClose={() => setOpen(null)}
         />
@@ -121,7 +150,6 @@ function ItemDialog({
   slug,
   lang,
   t,
-  currency,
   allowChange,
   onClose,
 }: {
@@ -129,7 +157,6 @@ function ItemDialog({
   slug: string;
   lang: Lang;
   t: Dictionary;
-  currency: string;
   allowChange: boolean;
   onClose: () => void;
 }) {
@@ -138,7 +165,18 @@ function ItemDialog({
   const [state, action, pending] = useActionState<ChooseState, FormData>(chooseAction, null);
   const name = localized(lang, item.name, item.nameEs);
   const description = localized(lang, item.description, item.descriptionEs);
-  const src = imageSrc(item, false);
+  // Gallery: main photo first, then general extras, then per-colour photos.
+  const photos = useMemo(() => {
+    const list: Array<{ src: string; thumb: string; option1Value: string | null }> = [];
+    if (item.imageId) list.push({ src: `/api/images/${item.imageId}`, thumb: `/api/images/${item.imageId}?thumb=1`, option1Value: null });
+    else if (item.imageUrl) list.push({ src: item.imageUrl, thumb: item.imageUrl, option1Value: null });
+    for (const g of item.gallery) list.push({ src: `/api/images/${g.imageId}`, thumb: `/api/images/${g.imageId}?thumb=1`, option1Value: g.option1Value });
+    return list;
+  }, [item]);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const colourPhotoIndex = choices[1] ? photos.findIndex((p) => p.option1Value === choices[1]) : -1;
+  const activeIndex = Math.min(photos.length - 1, Math.max(0, photoIndex));
+  const src = photos[activeIndex]?.src ?? null;
   const allChosen = item.groups.every((g) => Boolean(choices[g.index]));
   const chosenText = item.groups.map((g) => choices[g.index]).filter(Boolean).join(" / ");
   const canChoose = item.available && !item.overBudget;
@@ -163,16 +201,49 @@ function ItemDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="grid sm:grid-cols-2">
-          <div className="relative aspect-square bg-slate-100 sm:rounded-l-2xl">
-            {src ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={src} alt={name} className="h-full w-full object-cover sm:rounded-l-2xl" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-7xl">🎁</div>
+          <div className="flex flex-col bg-slate-100 sm:rounded-l-2xl">
+            <div className="relative aspect-square">
+              {src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt={name} data-gallery-main data-option={photos[activeIndex]?.option1Value ?? ""} className={`h-full w-full bg-white sm:rounded-tl-2xl ${item.framing.thumbFit === "cover" ? "object-cover" : "object-contain"}`} />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-7xl">🎁</div>
+              )}
+              {photos.length > 1 && (
+                <>
+                  <button type="button" onClick={() => setPhotoIndex((activeIndex - 1 + photos.length) % photos.length)} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-2.5 py-1 text-lg shadow" aria-label="Previous photo">
+                    ‹
+                  </button>
+                  <button type="button" onClick={() => setPhotoIndex((activeIndex + 1) % photos.length)} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-2.5 py-1 text-lg shadow" aria-label="Next photo">
+                    ›
+                  </button>
+                </>
+              )}
+              {colourPhotoIndex >= 0 && activeIndex === colourPhotoIndex && choices[1] && (
+                <span className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white">{choices[1]}</span>
+              )}
+              <button type="button" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-sm font-medium shadow sm:hidden" aria-label={t.pick.close}>
+                ✕
+              </button>
+            </div>
+            {photos.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto p-2">
+                {photos.map((p, i) => (
+                  <button
+                    key={`${p.src}-${i}`}
+                    type="button"
+                    data-gallery-thumb
+                    onClick={() => setPhotoIndex(i)}
+                    className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 ${i === activeIndex ? "border-brand" : "border-transparent"}`}
+                    aria-label={p.option1Value ? `${p.option1Value}` : `Photo ${i + 1}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.thumb} alt="" className="h-full w-full object-cover" />
+                    {p.option1Value && <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-1 text-[9px] text-white">{p.option1Value}</span>}
+                  </button>
+                ))}
+              </div>
             )}
-            <button type="button" onClick={onClose} className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-sm font-medium shadow sm:hidden" aria-label={t.pick.close}>
-              ✕
-            </button>
           </div>
           <div className="flex flex-col p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
@@ -191,11 +262,6 @@ function ItemDialog({
             </div>
             {description && <p className="mt-4 whitespace-pre-line text-sm text-slate-700">{description}</p>}
             {item.type === "CUSTOM" && <p className="mt-3 text-xs text-slate-500">{t.pick.customGiftNote}</p>}
-            {item.productUrl && item.type === "PRODUCT" && (
-              <a href={item.productUrl} target="_blank" rel="noopener noreferrer" className="mt-3 text-sm font-medium text-brand underline-offset-2 hover:underline">
-                {t.pick.viewProduct} ↗
-              </a>
-            )}
 
             <form action={action} className="mt-auto pt-5">
               <input type="hidden" name="slug" value={slug} />
@@ -218,7 +284,13 @@ function ItemDialog({
                             name={`option${g.index}Value`}
                             value={v}
                             checked={selected}
-                            onChange={() => setChoices((c) => ({ ...c, [g.index]: v }))}
+                            onChange={() => {
+                              setChoices((c) => ({ ...c, [g.index]: v }));
+                              if (g.index === 1) {
+                                const idx = photos.findIndex((p) => p.option1Value === v);
+                                if (idx >= 0) setPhotoIndex(idx);
+                              }
+                            }}
                             className="sr-only"
                             required
                           />
@@ -259,9 +331,6 @@ function ItemDialog({
                     </button>
                   </div>
                 </div>
-              )}
-              {item.cost !== null && item.cost > 0 && item.type === "PRODUCT" && (
-                <p className="mt-3 text-center text-xs text-slate-400">{formatMoney(item.cost, currency, lang)}</p>
               )}
             </form>
           </div>

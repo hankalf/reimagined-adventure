@@ -16,14 +16,14 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - English/Spanish toggle, defaulting to the browser language; campaign and item text can be entered in both languages.
 
 **Admins / HR**
-- Gift catalog: paste an Amazon link (ASIN extracted, canonical link stored, details prefilled when Amazon allows it), upload a photo (resized + thumbnail generated automatically), up to two option groups (e.g. Color and Size), cost, category. Custom non-purchase gifts with a "how HR fulfils this" note. Bulk import from an Excel/CSV spreadsheet with a downloadable template (see below).
+- Gift catalog: paste an Amazon link and the form fills itself in when the page can be read (name, price, description, category, every product photo, colour/size options; Amazon sometimes blocks this), upload a main photo plus a gallery of extra photos (resized + thumbnails generated automatically), a photo per colour that swaps in when the employee picks that colour, up to two option groups (e.g. Color and Size), cost, category. Custom non-purchase gifts with a "how HR fulfils this" note. Bulk import from an Excel/CSV spreadsheet with a downloadable template (see below).
 - Campaigns: choose which gifts to show and in what order, and for gifts with options tick which colours/sizes are offered in that campaign; per-campaign stock limits and cost overrides; mark out of stock or untick a colour (affected employees flagged for re-pick).
 - Employees: master list with CSV import (`employee_number, first_name, last_name, department, budget`), per-campaign eligibility and budget tiers, pick on behalf of a walk-up employee, reset a selection.
 - Orders: main list grouped by gift (quantities, unit cost, subtotal, Amazon link), custom gifts in their own section, per-row and bulk status changes (to order → ordered → received → collected), pickup-day search by employee number.
 - Pickup kiosk (`/admin/campaigns/<id>/kiosk`): full-screen page for the front desk. Scan the QR code on the employee's confirmation page with the device camera (BarcodeDetector where available, jsQR fallback), or type/USB-scan the confirmation code, employee number or name; see who they are and what they chose; mark collected in one tap with undo. Live collected/ready counters.
 - Budget: total vs committed vs ordered, spend per gift, per-employee budget vs cost with over-budget flags.
-- HR email: HTML summary + `orders.xlsx` (Summary, Detail, Budget, Not picked, Info) + two CSVs. Full list or only new since last email. Optional scheduled digest. Email history with preview.
-- Live spreadsheet feed: a secret URL per campaign that Excel ("Get Data → From Web") or Google Sheets (`IMPORTDATA`) can refresh automatically.
+- Orders spreadsheet (Settings): one live link for all campaigns that Excel ("Get Data → From Web") or Google Sheets (`IMPORTDATA`) refreshes automatically, plus a push webhook that POSTs every order change (chosen, changed, ordered, received, collected, reset, re-priced) to Power Automate, Zapier, Make or your own endpoint so a sheet fills itself. Per-campaign Excel downloads and live links on the campaign's "Excel & live sheet" tab.
+- Order-time pricing: type the price actually paid on the Orders row before marking it ordered; the gift is re-priced everywhere and every change is kept in the gift's price history.
 - QR poster: printable bilingual A4 page; PNG/SVG download.
 - Branding per campaign: logo, hero image, primary/accent colours, bilingual headline, welcome, pickup instructions and leadership message.
 - Admin users: ADMIN and HR roles, invite by email with a self-service set-password link (also shown to copy), deactivate/delete, forgot-password flow.
@@ -41,17 +41,12 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
    | `SESSION_SECRET` | yes | Long random string (`openssl rand -hex 32`) |
    | `APP_URL` | yes | Public URL, e.g. `https://gifts.up.railway.app` (used in QR codes and email links) |
    | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | first start | Creates the first admin when the users table is empty |
-   | `EMAIL_TRANSPORT` | yes | `console` (log only) or `smtp` |
-   | `EMAIL_FROM` | smtp | e.g. `Gift Portal <no-reply@company.com>` |
-   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | smtp | Works with Office 365, Google Workspace, Resend, SendGrid, Postmark, etc. |
-   | `CRON_SECRET` | optional | Enables `/api/cron/digest` for scheduled HR digests |
+   | `EMAIL_TRANSPORT`, `EMAIL_FROM`, `SMTP_*` | optional | Only used to email admin invite / password-reset links; the links are also shown on screen |
 
 4. **Generate a domain** (Settings → Networking) and put it in `APP_URL`.
 5. Deploy, then open `https://your-domain/admin/login` and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Change the password afterwards via "Forgot your password?" or Settings → Admin users.
 6. (Optional) **Demo data**: run `npm run db:seed` once from a Railway shell to load sample gifts, employees and an open campaign at `/g/holiday-2026`.
-7. (Optional) **Scheduled digest**: add a Railway cron service that runs
-   `curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://your-domain/api/cron/digest`
-   and turn on "Automatic digest" in the campaign's HR emails tab.
+7. **Orders spreadsheet**: Admin → Settings → Orders spreadsheet. Paste the live link into Excel or Google Sheets, and/or paste a Power Automate / Zapier / Make webhook URL so each order change is pushed as it happens.
 
 Images are stored in Postgres (resized to ≤1200px plus a 480px thumbnail), so no object storage or volume is needed.
 
@@ -79,9 +74,10 @@ src/app/admin/(print)/            printable QR poster
 src/app/admin/(kiosk)/            pickup-day kiosk with camera scanning
 src/app/api/                      images, QR, admin exports, live feed, cron digest, health
 src/lib/selection.ts              identity check, availability, budget, transactional pick, re-pick, status changes
-src/lib/report.ts                 one data builder behind Orders, Budget, HR email, CSV and Excel
+src/lib/report.ts                 one data builder behind Orders, Budget, CSV and Excel
 src/lib/excel.ts                  exceljs workbook
-src/lib/hr-email.ts               sends the HR order email with attachments
+src/lib/webhook.ts                orders webhook (push) + global live feed token
+src/lib/pricing.ts                order-time price updates and price history
 src/i18n/                         en/es dictionaries for the employee UI
 prisma/schema.prisma              data model; prisma/seed.ts demo data
 ```
@@ -113,7 +109,8 @@ Admin → Gift catalog → "Import gifts from a spreadsheet". Download the Excel
 | `unit_cost` | Cost per unit |
 | `option1_label`, `option1_values`, `option2_label`, `option2_values` | Option groups, values separated by commas or `\|` |
 | `colors`, `sizes` | Shortcuts that fill the option groups with labels Color / Size |
-| `image_url` | Photo link; the importer can download and store it |
+| `image_url` | Photo links separated by `\|`; first = main picture, rest = gallery; the importer can download and store them |
+| `color_images` | Photo per colour: `Teal=https://… \| Rose=https://…` |
 | `fulfillment_note` | Custom gifts: how HR fulfils it |
 | `active` | yes/no |
 

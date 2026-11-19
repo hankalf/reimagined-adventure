@@ -71,13 +71,72 @@ export function canonicalAmazonUrl(asin: string, originalUrl?: string | null): s
   return `https://${host}/dp/${asin.toUpperCase()}`;
 }
 
+export type ProductVariant = { label: string; values: string[] };
+
 export type ProductMetadata = {
   title?: string;
   imageUrl?: string;
+  /** All product photos found (first = main). */
+  images: string[];
   price?: number;
   description?: string;
+  category?: string;
+  /** Colour / size variations found on the page, e.g. [{ label: "Color", values: ["Black", "Teal"] }]. */
+  variants: ProductVariant[];
   source: "opengraph" | "none";
 };
+
+const VARIANT_LABELS: Record<string, string> = {
+  color_name: "Color",
+  colour_name: "Colour",
+  size_name: "Size",
+  style_name: "Style",
+  pattern_name: "Pattern",
+  material_type: "Material",
+  flavor_name: "Flavor",
+  item_package_quantity: "Pack size",
+  scent_name: "Scent",
+};
+
+function uniqueUrls(urls: string[], limit: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of urls) {
+    const u = raw.replace(/\\\//g, "/");
+    if (!/^https?:\/\//i.test(u)) continue;
+    // Amazon image URLs carry size suffixes like ._SX679_. ; normalise so the same photo is not listed twice.
+    const key = u.replace(/\._[A-Z0-9_,]+_\./, ".");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(u);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function stripTags(html: string): string {
+  return decodeEntities(html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+/** Extract the variation dimensions Amazon embeds as JSON ("variationValues":{"color_name":[...]}). */
+export function parseVariants(html: string): ProductVariant[] {
+  const m = html.match(/"variationValues"\s*:\s*(\{[^}]*\})/);
+  if (!m) return [];
+  try {
+    const obj = JSON.parse(m[1]) as Record<string, unknown>;
+    const out: ProductVariant[] = [];
+    for (const [key, values] of Object.entries(obj)) {
+      if (!Array.isArray(values)) continue;
+      const clean = values.map((v) => decodeEntities(String(v)).trim()).filter(Boolean);
+      if (clean.length === 0) continue;
+      const label = VARIANT_LABELS[key] ?? key.replace(/_name$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+      out.push({ label, values: clean.slice(0, 40) });
+    }
+    return out.slice(0, 2);
+  } catch {
+    return [];
+  }
+}
 
 function decodeEntities(text: string): string {
   return text
@@ -109,26 +168,43 @@ function metaContent(html: string, names: string[]): string | undefined {
 
 export function parseProductMetadata(html: string): ProductMetadata {
   const title =
-    metaContent(html, ["og:title", "twitter:title"]) ??
     html.match(/<span[^>]+id=["']productTitle["'][^>]*>([^<]+)</i)?.[1]?.trim() ??
+    metaContent(html, ["og:title", "twitter:title"]) ??
     html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
-  const imageUrl =
-    metaContent(html, ["og:image", "twitter:image"]) ??
-    html.match(/"hiRes":"(https:[^"]+)"/)?.[1] ??
-    html.match(/<img[^>]+id=["']landingImage["'][^>]*src=["']([^"']+)["']/i)?.[1];
+
+  // Photos: Amazon's image block lists every gallery photo as "hiRes"/"large"; fall back to OG / landing image.
+  const hiRes = [...html.matchAll(/"hiRes"\s*:\s*"(https:[^"]+)"/g)].map((m) => m[1]);
+  const large = [...html.matchAll(/"large"\s*:\s*"(https:[^"]+)"/g)].map((m) => m[1]);
+  const og = metaContent(html, ["og:image", "twitter:image"]);
+  const landing = html.match(/<img[^>]+id=["']landingImage["'][^>]*src=["']([^"']+)["']/i)?.[1];
+  const images = uniqueUrls([...hiRes, ...large, ...(og ? [og] : []), ...(landing ? [landing] : [])], 8);
+
   const priceText =
     metaContent(html, ["product:price:amount", "og:price:amount", "twitter:data1"]) ??
     html.match(/class=["']a-offscreen["'][^>]*>\s*\$?([0-9][0-9,]*\.?[0-9]*)\s*</i)?.[1];
-  const description = metaContent(html, ["og:description", "description"]);
   const price = priceText ? Number(priceText.replace(/[^0-9.]/g, "")) : undefined;
 
+  // Description: feature bullets when present, else the meta description.
+  const bulletsBlock = html.match(/id=["']feature-bullets["'][\s\S]*?<\/ul>/i)?.[0];
+  const bullets = bulletsBlock ? [...bulletsBlock.matchAll(/<span[^>]+class=["']a-list-item["'][^>]*>([\s\S]*?)<\/span>/gi)].map((m) => stripTags(m[1])).filter((b) => b.length > 3 && b.length < 300) : [];
+  const description = bullets.length > 0 ? bullets.slice(0, 4).join("\n") : metaContent(html, ["og:description", "description"]);
+
+  // Category: last breadcrumb.
+  const crumbsBlock = html.match(/id=["']wayfinding-breadcrumbs_feature_div["'][\s\S]*?<\/div>/i)?.[0];
+  const crumbs = crumbsBlock ? [...crumbsBlock.matchAll(/<a[^>]*>([\s\S]*?)<\/a>/gi)].map((m) => stripTags(m[1])).filter(Boolean) : [];
+  const category = crumbs.length > 0 ? crumbs[crumbs.length - 1].slice(0, 60) : undefined;
+
+  const variants = parseVariants(html);
   const cleanedTitle = title ? decodeEntities(title).replace(/\s*[:|-]\s*Amazon\.[a-z.]+.*$/i, "").trim() : undefined;
-  const hasAny = Boolean(cleanedTitle || imageUrl || (price !== undefined && !Number.isNaN(price)));
+  const hasAny = Boolean(cleanedTitle || images.length > 0 || (price !== undefined && !Number.isNaN(price)));
   return {
     title: cleanedTitle || undefined,
-    imageUrl,
+    imageUrl: images[0],
+    images,
     price: price !== undefined && !Number.isNaN(price) && price > 0 ? price : undefined,
-    description: description ? description.slice(0, 1000) : undefined,
+    description: description ? description.slice(0, 1500) : undefined,
+    category,
+    variants,
     source: hasAny ? "opengraph" : "none",
   };
 }
@@ -148,11 +224,11 @@ export async function fetchProductMetadata(url: string, timeoutMs = 7000): Promi
         "accept-language": "en-US,en;q=0.9",
       },
     });
-    if (!res.ok) return { source: "none" };
-    const html = (await res.text()).slice(0, 2_000_000);
+    if (!res.ok) return { source: "none", images: [], variants: [] };
+    const html = (await res.text()).slice(0, 3_000_000);
     return parseProductMetadata(html);
   } catch {
-    return { source: "none" };
+    return { source: "none", images: [], variants: [] };
   } finally {
     clearTimeout(timer);
   }

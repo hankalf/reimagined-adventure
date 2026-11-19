@@ -17,9 +17,8 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/export/[
   const campaign = await db.campaign.findUnique({ where: { id: campaignId }, select: { id: true, slug: true } });
   if (!campaign) return new NextResponse("Not found", { status: 404 });
   const type = request.nextUrl.searchParams.get("type") ?? "xlsx";
-  const onlyNew = request.nextUrl.searchParams.get("new") === "1";
-  const full = await db.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { lastHrEmailAt: true } });
-  const data = await buildReportData(campaign.id, { since: onlyNew ? full.lastHrEmailAt : null });
+  const onlyNew = false;
+  const data = await buildReportData(campaign.id);
   const stamp = data.generatedAt.toISOString().slice(0, 10);
 
   if (type === "xlsx") {

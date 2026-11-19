@@ -28,6 +28,18 @@ const section = (msg) => console.log(`\n[${++step}] ${msg}`);
 function assert(cond, msg) {
   if (!cond) throw new Error(`Assertion failed: ${msg}`);
 }
+/** Print the current page the way Chrome would (CSS @page size wins) and report page count and paper size. */
+async function letterPdf(page) {
+  await page.waitForLoadState("networkidle");
+  await page.emulateMedia({ media: "print" });
+  const buffer = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+  await page.emulateMedia({ media: "screen" });
+  const text = buffer.toString("latin1");
+  const pages = (text.match(/\/Type\s*\/Page(?!s)/g) || []).length;
+  const letter = /\/MediaBox\s*\[\s*0\s+0\s+612(\.0+)?\s+792(\.0+)?\s*\]/.test(text);
+  return { buffer, pages, letter };
+}
+
 async function shot(page, name) {
   await page.screenshot({ path: path.join(SHOTS, `${String(step).padStart(2, "0")}-${name}.png`), fullPage: true });
 }
@@ -232,10 +244,15 @@ try {
   assert(posterMugImg && posterMugImg.includes("/api/images/") && posterMugImg.includes("thumb=1"), "poster uses the gift thumbnails");
   assert((await a.locator("[data-poster-gift]", { hasText: "Company Hoodie" }).locator("text=Sudadera con capucha de la empresa").count()) === 1, "poster shows the Spanish name under each gift");
   await shot(a, "poster");
+  const posterPdf = await letterPdf(a);
+  assert(posterPdf.pages === 1 && posterPdf.letter, `poster prints on exactly one US Letter page (pages=${posterPdf.pages}, letter=${posterPdf.letter})`);
+  fs.writeFileSync(path.join(SHOTS, "poster-letter.pdf"), posterPdf.buffer);
   await a.click("[data-poster-gifts-toggle]");
   await a.waitForURL(/poster\?gifts=0/);
   assert((await a.locator("[data-poster-gifts]").count()) === 0, "gifts section can be hidden for a QR-only poster");
-  ok("poster shows gift thumbnails (bilingual names) and can hide them");
+  const qrOnlyPdf = await letterPdf(a);
+  assert(qrOnlyPdf.pages === 1 && qrOnlyPdf.letter, `QR-only poster prints on one Letter page (pages=${qrOnlyPdf.pages})`);
+  ok("poster shows gift thumbnails (bilingual names), can hide them, and prints on one US Letter page either way");
 
   section("Employee flow in Spanish: identity check with employee number + last name");
   const emp = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 1, locale: "es-MX" });

@@ -31,7 +31,14 @@ body {
   }
   body {
     background: #fff;
+    min-height: 0 !important;
   }
+}
+
+/* Keep brand colours, borders and photo backgrounds when printing (posters). */
+.print-exact {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 /* Minimal form primitives used across the admin (Tailwind v4: @apply only works with built-in utilities) */

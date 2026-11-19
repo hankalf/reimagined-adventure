@@ -3,6 +3,9 @@ import { dict } from "@/i18n";
 import { getLang } from "@/lib/lang";
 import { loadCampaign } from "./campaign";
 
+// Employee pages depend on cookies and live campaign data; never prerender at build time.
+export const dynamic = "force-dynamic";
+
 export default async function EmployeeLayout({ children, params }: LayoutProps<"/g/[slug]">) {
   const { slug } = await params;
   const [campaign, lang] = await Promise.all([loadCampaign(slug), getLang()]);

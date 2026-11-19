@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { AdminNav } from "@/components/admin/nav";
 
+// Admin pages are per-user and read the database on every request; never prerender them at build time.
+export const dynamic = "force-dynamic";
+
 export default async function AdminAppLayout({ children }: { children: React.ReactNode }) {
   const admin = await requireAdmin();
   return (

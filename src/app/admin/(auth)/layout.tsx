@@ -1,3 +1,6 @@
+// Login bootstraps the first admin from the database; never prerender at build time.
+export const dynamic = "force-dynamic";
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">

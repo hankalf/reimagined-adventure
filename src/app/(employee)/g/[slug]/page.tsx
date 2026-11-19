@@ -5,6 +5,7 @@ import { getLang } from "@/lib/lang";
 import { campaignAcceptsPicks, daysUntil } from "@/lib/selection-rules";
 import { loadCampaign } from "./campaign";
 import { IdentifyForm } from "./identify-form";
+import { DancingElf } from "@/components/dancing-elf";
 
 export default async function LandingPage({ params }: PageProps<"/g/[slug]">) {
   const { slug } = await params;
@@ -48,6 +49,18 @@ export default async function LandingPage({ params }: PageProps<"/g/[slug]">) {
               <p className="whitespace-pre-line text-slate-700 italic">“{leadership}”</p>
               {campaign.leadershipName && <footer className="mt-3 text-sm font-medium text-slate-600">— {campaign.leadershipName}</footer>}
             </blockquote>
+          )}
+          {campaign.mascotEnabled && (
+            <div className="mt-8 flex justify-center md:justify-start">
+              <DancingElf
+                faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
+                faceZoom={campaign.mascotFaceZoom}
+                faceOffsetY={campaign.mascotFaceOffsetY}
+                caption={campaign.mascotCaption ? localized(lang, campaign.mascotCaption, campaign.mascotCaptionEs) : null}
+                tapHint={t.mascot.tap}
+                size={220}
+              />
+            </div>
           )}
         </section>
 

@@ -78,3 +78,78 @@ body {
 .table td {
   @apply px-3 py-2 border-b border-slate-100 align-top;
 }
+
+/* ---- Dancing elf mascot (see src/components/dancing-elf.tsx) ---- */
+.elf-stage {
+  --elf-speed: 1;
+}
+.elf-stage[data-fast="1"] {
+  --elf-speed: 0.45;
+}
+.elf-snow {
+  position: absolute;
+  top: -20px;
+  color: #93c5fd;
+  opacity: 0.8;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .elf-body {
+    animation: elf-bob calc(0.9s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-head {
+    animation: elf-nod calc(0.9s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-arm-l {
+    animation: elf-arm-left calc(0.9s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-arm-r {
+    animation: elf-arm-right calc(0.9s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-leg-l {
+    animation: elf-leg-left calc(0.9s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-leg-r {
+    animation: elf-leg-right calc(0.9s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-bell {
+    animation: elf-bell calc(0.45s * var(--elf-speed)) ease-in-out infinite alternate;
+  }
+  .elf-snow {
+    animation-name: elf-snowfall;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+}
+@keyframes elf-bob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+@keyframes elf-nod {
+  from { transform: rotate(-6deg); }
+  to { transform: rotate(6deg); }
+}
+@keyframes elf-arm-left {
+  from { transform: rotate(-25deg); }
+  to { transform: rotate(35deg); }
+}
+@keyframes elf-arm-right {
+  from { transform: rotate(25deg); }
+  to { transform: rotate(-35deg); }
+}
+@keyframes elf-leg-left {
+  from { transform: rotate(-18deg); }
+  to { transform: rotate(12deg); }
+}
+@keyframes elf-leg-right {
+  from { transform: rotate(18deg); }
+  to { transform: rotate(-12deg); }
+}
+@keyframes elf-bell {
+  from { transform: rotate(-20deg); }
+  to { transform: rotate(20deg); }
+}
+@keyframes elf-snowfall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.9; }
+  100% { transform: translateY(340px) rotate(360deg); opacity: 0; }
+}

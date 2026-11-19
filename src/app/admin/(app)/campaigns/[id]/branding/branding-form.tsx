@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { DancingElf } from "@/components/dancing-elf";
 import { updateBrandingAction, type FormState } from "../../actions";
 
 type Branding = {
@@ -20,6 +21,13 @@ type Branding = {
   leadershipMessage: string;
   leadershipMessageEs: string;
   leadershipName: string;
+  mascotEnabled: boolean;
+  mascotImageId: string | null;
+  mascotCaption: string;
+  mascotCaptionEs: string;
+  mascotShowOnDone: boolean;
+  mascotFaceZoom: number;
+  mascotFaceOffsetY: number;
 };
 
 function Bilingual({ name, label, value, valueEs, rows }: { name: string; label: string; value: string; valueEs: string; rows?: number }) {
@@ -48,12 +56,19 @@ export function BrandingForm({ campaign }: { campaign: Branding }) {
   const [accent, setAccent] = useState(campaign.accentColor);
   const [removeLogo, setRemoveLogo] = useState(false);
   const [removeHero, setRemoveHero] = useState(false);
+  const [mascotEnabled, setMascotEnabled] = useState(campaign.mascotEnabled);
+  const [removeMascot, setRemoveMascot] = useState(false);
+  const [mascotPreview, setMascotPreview] = useState<string | null>(campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null);
+  const [mascotZoom, setMascotZoom] = useState(campaign.mascotFaceZoom);
+  const [mascotOffset, setMascotOffset] = useState(campaign.mascotFaceOffsetY);
+  const [mascotCaption, setMascotCaption] = useState(campaign.mascotCaption);
 
   return (
     <form action={action} className="space-y-6" encType="multipart/form-data">
       <input type="hidden" name="id" value={campaign.id} />
       <input type="hidden" name="logoRemove" value={removeLogo ? "1" : "0"} />
       <input type="hidden" name="heroRemove" value={removeHero ? "1" : "0"} />
+      <input type="hidden" name="mascotRemove" value={removeMascot ? "1" : "0"} />
 
       <section className="card p-5">
         <div className="flex items-start justify-between gap-3">
@@ -139,6 +154,87 @@ export function BrandingForm({ campaign }: { campaign: Branding }) {
             Signed by
           </label>
           <input id="leadershipName" name="leadershipName" defaultValue={campaign.leadershipName} className="input" placeholder="Dana Reyes, CEO" />
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Holiday mascot: the dancing elf 🧝</h2>
+            <p className="text-xs text-slate-500">
+              A cartoon elf that dances on the employee landing page, wearing the face of whoever you upload (a plant manager, the CEO, Santa…). Employees can tap it to make it dance faster.
+              Get the person&apos;s OK first: the landing page is reachable by anyone who scans the poster.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="mascotEnabled" checked={mascotEnabled} onChange={(e) => setMascotEnabled(e.target.checked)} className="h-4 w-4" />
+            Show the elf
+          </label>
+        </div>
+        <div className="mt-4 grid gap-5 md:grid-cols-[260px_1fr]">
+          <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+            <DancingElf faceSrc={removeMascot ? null : mascotPreview} faceZoom={mascotZoom} faceOffsetY={mascotOffset} caption={mascotCaption || undefined} size={200} tapHint="Tap to speed up" />
+            <p className="mt-1 text-center text-[11px] text-slate-500">Live preview. Tap the elf to see the fast dance.</p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="mascot" className="label">
+                Face photo
+              </label>
+              <input
+                id="mascot"
+                name="mascot"
+                type="file"
+                accept="image/*"
+                className="input"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    setMascotPreview(URL.createObjectURL(f));
+                    setRemoveMascot(false);
+                  }
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">A straight-on headshot works best. The photo is cropped to a circle; use the sliders to centre the face. Without a photo, a cartoon face is used.</p>
+              {mascotPreview && !removeMascot && (
+                <button type="button" onClick={() => { setRemoveMascot(true); setMascotPreview(null); }} className="mt-1 text-xs text-red-700 hover:underline">
+                  Remove photo
+                </button>
+              )}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="mascotFaceZoom" className="label">
+                  Zoom ({mascotZoom}%)
+                </label>
+                <input id="mascotFaceZoom" name="mascotFaceZoom" type="range" min={100} max={250} step={5} value={mascotZoom} onChange={(e) => setMascotZoom(Number(e.target.value))} className="w-full" />
+              </div>
+              <div>
+                <label htmlFor="mascotFaceOffsetY" className="label">
+                  Move face up / down ({mascotOffset})
+                </label>
+                <input id="mascotFaceOffsetY" name="mascotFaceOffsetY" type="range" min={-40} max={40} step={2} value={mascotOffset} onChange={(e) => setMascotOffset(Number(e.target.value))} className="w-full" />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label htmlFor="mascotCaption" className="label">
+                  Caption (English)
+                </label>
+                <input id="mascotCaption" name="mascotCaption" value={mascotCaption} onChange={(e) => setMascotCaption(e.target.value)} className="input" placeholder="Happy holidays from Dave in Plant 2!" />
+              </div>
+              <div>
+                <label htmlFor="mascotCaptionEs" className="label">
+                  Caption (Spanish)
+                </label>
+                <input id="mascotCaptionEs" name="mascotCaptionEs" defaultValue={campaign.mascotCaptionEs} className="input" placeholder="¡Felices fiestas de parte de Dave!" />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="mascotShowOnDone" defaultChecked={campaign.mascotShowOnDone} className="h-4 w-4" />
+              Also show a small elf on the thank-you page
+            </label>
+          </div>
         </div>
       </section>
 

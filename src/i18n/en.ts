@@ -21,6 +21,10 @@ export const en = {
     aMessageFrom: "A message from {name}",
   },
 
+  mascot: {
+    tap: "Tap the elf to make it dance faster!",
+  },
+
   pick: {
     greeting: "Hi {name}!",
     chooseOne: "Choose one gift below. You can only pick once, so take your time.",

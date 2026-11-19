@@ -23,6 +23,13 @@ export default async function BrandingPage({ params }: PageProps<"/admin/campaig
         leadershipMessage: c.leadershipMessage ?? "",
         leadershipMessageEs: c.leadershipMessageEs ?? "",
         leadershipName: c.leadershipName ?? "",
+        mascotEnabled: c.mascotEnabled,
+        mascotImageId: c.mascotImageId,
+        mascotCaption: c.mascotCaption ?? "",
+        mascotCaptionEs: c.mascotCaptionEs ?? "",
+        mascotShowOnDone: c.mascotShowOnDone,
+        mascotFaceZoom: c.mascotFaceZoom,
+        mascotFaceOffsetY: c.mascotFaceOffsetY,
       }}
     />
   );

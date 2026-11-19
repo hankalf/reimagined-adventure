@@ -112,6 +112,15 @@ model Campaign {
   hideItemsOverBudget   Boolean  @default(false)
   currency              String   @default("USD")
 
+  // Holiday mascot (dancing elf with an uploaded face)
+  mascotEnabled     Boolean @default(false)
+  mascotImageId     String?
+  mascotCaption     String?
+  mascotCaptionEs   String?
+  mascotShowOnDone  Boolean @default(true)
+  mascotFaceZoom    Int     @default(100)
+  mascotFaceOffsetY Int     @default(0)
+
   // Integrations
   feedToken     String    @unique @default(cuid())
   digestEnabled Boolean   @default(false)

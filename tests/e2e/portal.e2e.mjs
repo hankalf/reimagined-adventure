@@ -99,7 +99,7 @@ try {
   for (const label of [`E2E Mug ${run}`, `E2E Extra PTO ${run}`, "Company Hoodie", "Premium Wireless Headphones"]) {
     await a.locator("label", { hasText: label }).locator('input[name=itemIds]').check();
   }
-  await a.locator('input[name^="enabled1:"][value="Green"]').uncheck();
+  await a.locator("li", { hasText: `E2E Mug ${run}` }).locator('input[name^="enabled1:"][value="Green"]').uncheck();
   await a.click('button:has-text("Add selected gifts")');
   await a.waitForLoadState("networkidle");
   assert((await a.locator("h2", { hasText: "Gifts shown to employees (4)" }).count()) === 1, "4 gifts shown");
@@ -121,6 +121,23 @@ try {
   await a.reload();
   assert((await a.locator("text=Only the list uploaded for this campaign").count()) === 1, "eligibility switched to the uploaded list");
 
+  section("Branding: enable the dancing elf with an uploaded face");
+  const face = await sharp({ create: { width: 400, height: 400, channels: 3, background: { r: 250, g: 210, b: 170 } } }).png().toBuffer();
+  const facePath = path.join(SHOTS, "face.png");
+  fs.writeFileSync(facePath, face);
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/branding`);
+  await a.check('input[name="mascotEnabled"]');
+  await a.setInputFiles("#mascot", facePath);
+  await a.fill("#mascotCaption", `Happy holidays from the plant manager ${run}!`);
+  await a.fill("#mascotCaptionEs", `¡Felices fiestas de parte del gerente ${run}!`);
+  await a.click('button:has-text("Save branding")');
+  await a.waitForSelector("text=Branding saved.");
+  await a.reload();
+  const faceHref = await a.locator("[data-elf] image").first().getAttribute("href");
+  assert(faceHref && faceHref.includes("/api/images/"), `branding preview shows the uploaded face (${faceHref})`);
+  ok("elf enabled with an uploaded face and bilingual caption");
+  await shot(a, "branding-elf");
+
   section("Open the campaign and fetch the QR code");
   await a.click('button:has-text("Open campaign")');
   await a.waitForSelector("text=Close campaign");
@@ -139,6 +156,15 @@ try {
   await e.goto(`${BASE}/g/${SLUG}`);
   await e.waitForSelector("text=Número de empleado");
   ok("landing page rendered in Spanish from Accept-Language");
+  const elf = e.locator("[data-elf]");
+  assert((await elf.count()) === 1, "dancing elf shown on the landing page");
+  assert((await e.locator(`text=¡Felices fiestas de parte del gerente ${run}!`).count()) === 1, "Spanish caption shown");
+  const landingFace = await elf.locator("image").getAttribute("href");
+  assert(landingFace && landingFace.includes("/api/images/"), "elf wears the uploaded face");
+  await elf.locator("button").click();
+  assert((await elf.getAttribute("data-fast")) === "1", "tapping the elf switches to the fast dance");
+  ok("elf dances with the uploaded face; tap speeds it up");
+  await shot(e, "landing-elf");
   await e.fill("#employeeNumber", `E2E${run}1`);
   await e.fill("#lastName", "Smith");
   await e.click('button[type=submit]');
@@ -376,7 +402,8 @@ try {
   const col = (name) => headerRow.indexOf(name) + 1;
   const newRow = giftsSheet.addRow([]);
   newRow.getCell(col("name")).value = `E2E Imported Tumbler ${run}`;
-  newRow.getCell(col("amazon_url")).value = "https://www.amazon.com/Some-Tumbler/dp/B0IMPORT12/ref=abc";
+  const importAsin = `B0E2E${run.toUpperCase()}`; // 10 characters, unique per run
+  newRow.getCell(col("amazon_url")).value = `https://www.amazon.com/Some-Tumbler/dp/${importAsin}/ref=abc`;
   newRow.getCell(col("unit_cost")).value = "$25.50";
   newRow.getCell(col("colors")).value = "Teal | Rose";
   newRow.getCell(col("sizes")).value = "20oz, 30oz";
@@ -389,11 +416,12 @@ try {
   await a.click('button:has-text("Import gifts")');
   await a.waitForSelector("text=/Imported: /");
   const importMsg = await a.locator("text=/Imported: /").innerText();
-  assert(/Imported: 2 new, 1 updated/.test(importMsg), `template examples upsert (earbuds matched by ASIN) and the new row is created (${importMsg})`);
+  // Earbuds example matches the seeded gift by ASIN (updated); the PTO example is new on a fresh DB and updated on re-runs.
+  assert(/Imported: (2 new, 1 updated|1 new, 2 updated)/.test(importMsg), `template examples upsert by ASIN/SKU and the new row is created (${importMsg})`);
   await a.goto(`${BASE}/admin/items?q=${encodeURIComponent(`E2E Imported Tumbler ${run}`)}`);
   const importedRow = a.locator("tr", { hasText: `E2E Imported Tumbler ${run}` });
   assert((await importedRow.count()) === 1, "imported gift listed");
-  assert((await importedRow.locator("text=ASIN B0IMPORT12").count()) === 1, "ASIN extracted from the Amazon link");
+  assert((await importedRow.locator(`text=ASIN ${importAsin}`).count()) === 1, "ASIN extracted from the Amazon link");
   assert((await importedRow.locator("text=Color: Teal, Rose").count()) === 1 && (await importedRow.locator("text=Size: 20oz, 30oz").count()) === 1, "colors and sizes shortcut columns became option groups");
   assert((await importedRow.locator("text=$25.50").count()) === 1, "unit cost parsed");
   ok("spreadsheet import works end to end");

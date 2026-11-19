@@ -166,12 +166,18 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
   if (!isHexColor(primaryColor) || !isHexColor(accentColor)) return { error: "Colours must be hex values like #1d4ed8." };
   let logoImageId: string | null | undefined;
   let heroImageId: string | null | undefined;
+  let mascotImageId: string | null | undefined;
   try {
     logoImageId = await storeUpload(formData, "logo");
     heroImageId = await storeUpload(formData, "hero");
+    mascotImageId = await storeUpload(formData, "mascot");
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not process an image." };
   }
+  const clampInt = (raw: string, min: number, max: number, fallback: number) => {
+    const n = Math.round(Number(raw));
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
   await db.campaign.update({
     where: { id },
     data: {
@@ -187,8 +193,15 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
       leadershipMessage: s(formData, "leadershipMessage") || null,
       leadershipMessageEs: s(formData, "leadershipMessageEs") || null,
       leadershipName: s(formData, "leadershipName") || null,
+      mascotEnabled: formData.get("mascotEnabled") === "on",
+      mascotCaption: s(formData, "mascotCaption") || null,
+      mascotCaptionEs: s(formData, "mascotCaptionEs") || null,
+      mascotShowOnDone: formData.get("mascotShowOnDone") === "on",
+      mascotFaceZoom: clampInt(s(formData, "mascotFaceZoom"), 100, 250, 100),
+      mascotFaceOffsetY: clampInt(s(formData, "mascotFaceOffsetY"), -40, 40, 0),
       ...(logoImageId !== undefined ? { logoImageId } : {}),
       ...(heroImageId !== undefined ? { heroImageId } : {}),
+      ...(mascotImageId !== undefined ? { mascotImageId } : {}),
     },
   });
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "campaign.branding_updated", entityType: "Campaign", entityId: id });

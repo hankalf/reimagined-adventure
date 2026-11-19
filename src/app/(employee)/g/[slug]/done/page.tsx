@@ -7,6 +7,7 @@ import { imageSrc } from "@/lib/image-src";
 import { getLang } from "@/lib/lang";
 import { qrDataUrl } from "@/lib/qr";
 import { optionDetail } from "@/lib/options";
+import { DancingElf } from "@/components/dancing-elf";
 import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
 
@@ -34,9 +35,21 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="card overflow-hidden">
-        <div className="p-6 text-center" style={{ background: `linear-gradient(135deg, ${campaign.primaryColor}, ${campaign.accentColor})` }}>
-          <div className="text-4xl">🎉</div>
-          <h1 className="mt-2 text-2xl font-bold text-white">{fill(t.done.thanks, { name: employee.firstName })}</h1>
+        <div className="flex items-center justify-center gap-4 p-6 text-center" style={{ background: `linear-gradient(135deg, ${campaign.primaryColor}, ${campaign.accentColor})` }}>
+          {campaign.mascotEnabled && campaign.mascotShowOnDone && (
+            <DancingElf
+              faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
+              faceZoom={campaign.mascotFaceZoom}
+              faceOffsetY={campaign.mascotFaceOffsetY}
+              size={90}
+              snow={false}
+              tapHint={t.mascot.tap}
+            />
+          )}
+          <div>
+            <div className="text-4xl">🎉</div>
+            <h1 className="mt-2 text-2xl font-bold text-white">{fill(t.done.thanks, { name: employee.firstName })}</h1>
+          </div>
         </div>
         <div className="grid gap-6 p-6 sm:grid-cols-5">
           <div className="sm:col-span-2">

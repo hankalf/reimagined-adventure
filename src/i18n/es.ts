@@ -23,6 +23,10 @@ export const es: Dictionary = {
     aMessageFrom: "Un mensaje de {name}",
   },
 
+  mascot: {
+    tap: "¡Toca al elfo para que baile más rápido!",
+  },
+
   pick: {
     greeting: "¡Hola {name}!",
     chooseOne: "Elige un regalo. Solo puedes elegir una vez, así que tómate tu tiempo.",

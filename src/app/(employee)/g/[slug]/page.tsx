@@ -8,6 +8,7 @@ import { IdentifyForm } from "./identify-form";
 import { DancingMascot } from "@/components/dancing-mascot";
 import { db } from "@/lib/db";
 import { videoEmbed } from "@/lib/video";
+import { landingMascotSize, mascotFaceProps } from "@/lib/mascot";
 
 export default async function LandingPage({ params, searchParams }: PageProps<"/g/[slug]">) {
   const { slug } = await params;
@@ -21,6 +22,7 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
   const previewEmployee = previewing && session ? await db.employee.findUnique({ where: { id: session.employeeId } }) : null;
   const pickCount = campaign.showPickCount ? await db.selection.count({ where: { campaignId: campaign.id, status: { in: ["SELECTED", "ORDERED", "RECEIVED", "COLLECTED"] } } }) : 0;
   const video = videoEmbed(campaign.videoUrl);
+  const mascots = campaign.mascotEnabled ? await db.campaignMascot.findMany({ where: { campaignId: campaign.id, showOnLanding: true }, orderBy: { sortOrder: "asc" } }) : [];
 
   const window = campaignAcceptsPicks(campaign);
   const headline = localized(lang, campaign.welcomeHeadline, campaign.welcomeHeadlineEs);
@@ -72,20 +74,17 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
               {campaign.leadershipName && <footer className="mt-3 text-sm font-medium text-slate-600">— {campaign.leadershipName}</footer>}
             </blockquote>
           )}
-          {campaign.mascotEnabled && (
-            <div className="mt-8 flex justify-center md:justify-start">
-              <DancingMascot
-                kind={campaign.mascotKind}
-                faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
-                faceZoom={campaign.mascotFaceZoom}
-                faceOffsetX={campaign.mascotFaceOffsetX}
-                faceOffsetY={campaign.mascotFaceOffsetY}
-                faceRotate={campaign.mascotFaceRotate}
-                faceFlip={campaign.mascotFaceFlip}
-                caption={campaign.mascotCaption ? localized(lang, campaign.mascotCaption, campaign.mascotCaptionEs) : null}
-                tapHint={t.mascot.tap}
-                size={220}
-              />
+          {mascots.length > 0 && (
+            <div className="mt-8 flex flex-wrap items-end justify-center gap-4 md:justify-start" data-landing-mascots>
+              {mascots.map((m) => (
+                <DancingMascot
+                  key={m.id}
+                  {...mascotFaceProps(m)}
+                  caption={m.caption ? localized(lang, m.caption, m.captionEs) : null}
+                  tapHint={t.mascot.tap}
+                  size={landingMascotSize(mascots.length)}
+                />
+              ))}
             </div>
           )}
         </section>

@@ -124,19 +124,8 @@ model Campaign {
   showPickCount             Boolean @default(true)
   notifyEmployeesOnReceived Boolean @default(false)
 
-  // Holiday mascot (dancing elf with an uploaded face)
+  // Holiday mascots: master switch; the mascots themselves are in CampaignMascot
   mascotEnabled     Boolean @default(false)
-  /// elf | santa | snowman | reindeer | gingerbread | banana | pineapple | strawberry
-  mascotKind        String  @default("elf")
-  mascotImageId     String?
-  mascotCaption     String?
-  mascotCaptionEs   String?
-  mascotShowOnDone  Boolean @default(true)
-  mascotFaceZoom    Int     @default(100)
-  mascotFaceOffsetX Int     @default(0)
-  mascotFaceOffsetY Int     @default(0)
-  mascotFaceRotate  Int     @default(0)
-  mascotFaceFlip    Boolean @default(false)
 
   // Integrations
   feedToken     String    @unique @default(cuid())
@@ -150,6 +139,32 @@ model Campaign {
   items      CampaignItem[]
   selections Selection[]
   emails     EmailLog[]
+  mascots    CampaignMascot[]
+}
+
+/// A dancing holiday character wearing an uploaded face. A campaign can have several, each placed on the
+/// employee home (landing) page, the thank-you page and/or the printed poster.
+model CampaignMascot {
+  id            String   @id @default(cuid())
+  campaignId    String
+  /// elf | santa | snowman | reindeer | gingerbread | banana | pineapple | strawberry
+  kind          String   @default("elf")
+  imageId       String?
+  caption       String?
+  captionEs     String?
+  faceZoom      Int      @default(100)
+  faceOffsetX   Int      @default(0)
+  faceOffsetY   Int      @default(0)
+  faceRotate    Int      @default(0)
+  faceFlip      Boolean  @default(false)
+  showOnLanding Boolean  @default(true)
+  showOnDone    Boolean  @default(false)
+  showOnPoster  Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, sortOrder])
 }
 
 model CampaignEmployee {

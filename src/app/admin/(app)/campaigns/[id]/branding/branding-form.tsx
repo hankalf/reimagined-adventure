@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { DancingMascot, MASCOT_KINDS } from "@/components/dancing-mascot";
+import { MascotsEditor, type MascotValues } from "./mascots-editor";
 import { updateBrandingAction, type FormState } from "../../actions";
 
 type Branding = {
@@ -22,16 +22,7 @@ type Branding = {
   leadershipMessageEs: string;
   leadershipName: string;
   mascotEnabled: boolean;
-  mascotImageId: string | null;
-  mascotCaption: string;
-  mascotCaptionEs: string;
-  mascotShowOnDone: boolean;
-  mascotKind: string;
-  mascotFaceZoom: number;
-  mascotFaceOffsetX: number;
-  mascotFaceOffsetY: number;
-  mascotFaceRotate: number;
-  mascotFaceFlip: boolean;
+  mascots: MascotValues[];
   videoUrl: string;
   showPickCount: boolean;
   notifyEmployeesOnReceived: boolean;
@@ -63,23 +54,12 @@ export function BrandingForm({ campaign }: { campaign: Branding }) {
   const [accent, setAccent] = useState(campaign.accentColor);
   const [removeLogo, setRemoveLogo] = useState(false);
   const [removeHero, setRemoveHero] = useState(false);
-  const [mascotEnabled, setMascotEnabled] = useState(campaign.mascotEnabled);
-  const [removeMascot, setRemoveMascot] = useState(false);
-  const [mascotPreview, setMascotPreview] = useState<string | null>(campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null);
-  const [mascotKind, setMascotKind] = useState(campaign.mascotKind);
-  const [mascotZoom, setMascotZoom] = useState(campaign.mascotFaceZoom);
-  const [mascotOffsetX, setMascotOffsetX] = useState(campaign.mascotFaceOffsetX);
-  const [mascotOffset, setMascotOffset] = useState(campaign.mascotFaceOffsetY);
-  const [mascotRotate, setMascotRotate] = useState(campaign.mascotFaceRotate);
-  const [mascotFlip, setMascotFlip] = useState(campaign.mascotFaceFlip);
-  const [mascotCaption, setMascotCaption] = useState(campaign.mascotCaption);
 
   return (
     <form action={action} className="space-y-6" encType="multipart/form-data">
       <input type="hidden" name="id" value={campaign.id} />
       <input type="hidden" name="logoRemove" value={removeLogo ? "1" : "0"} />
       <input type="hidden" name="heroRemove" value={removeHero ? "1" : "0"} />
-      <input type="hidden" name="mascotRemove" value={removeMascot ? "1" : "0"} />
 
       <section className="card p-5">
         <div className="flex items-start justify-between gap-3">
@@ -186,122 +166,7 @@ export function BrandingForm({ campaign }: { campaign: Branding }) {
         </label>
       </section>
 
-      <section className="card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">Holiday mascot 🧝🎅⛄🍌</h2>
-            <p className="text-xs text-slate-500">
-              A dancing character on the employee landing page wearing the face of whoever you upload (a plant manager, the CEO…). Pick an elf, Santa, a snowman, a reindeer, a gingerbread
-              person or dancing fruit. Employees can tap it to make it dance faster. Get the person&apos;s OK first: the landing page is reachable by anyone who scans the poster.
-            </p>
-          </div>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" name="mascotEnabled" checked={mascotEnabled} onChange={(e) => setMascotEnabled(e.target.checked)} className="h-4 w-4" />
-            Show the elf
-          </label>
-        </div>
-        <div className="mt-4 grid gap-5 md:grid-cols-[260px_1fr]">
-          <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
-            <DancingMascot kind={mascotKind} faceSrc={removeMascot ? null : mascotPreview} faceZoom={mascotZoom} faceOffsetX={mascotOffsetX} faceOffsetY={mascotOffset} faceRotate={mascotRotate} faceFlip={mascotFlip} caption={mascotCaption || undefined} size={200} tapHint="Tap to speed up" />
-            <p className="mt-1 text-center text-[11px] text-slate-500">Live preview. Tap the elf to see the fast dance.</p>
-          </div>
-          <div className="space-y-4">
-            <fieldset>
-              <legend className="label">Character</legend>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-8" data-mascot-picker>
-                {MASCOT_KINDS.map((k) => (
-                  <label key={k.key} className={`flex cursor-pointer flex-col items-center rounded-lg border p-1.5 text-center text-[11px] ${mascotKind === k.key ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:bg-slate-50"}`} title={k.label}>
-                    <input type="radio" name="mascotKind" value={k.key} checked={mascotKind === k.key} onChange={() => setMascotKind(k.key)} className="sr-only" />
-                    <DancingMascot kind={k.key} still snow={false} size={56} faceSrc={removeMascot ? null : mascotPreview} faceZoom={mascotZoom} faceOffsetX={mascotOffsetX} faceOffsetY={mascotOffset} faceRotate={mascotRotate} faceFlip={mascotFlip} />
-                    <span className="mt-1 leading-tight">
-                      {k.emoji} {k.label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <p className="mt-1 text-[11px] text-slate-500">Each miniature wears the uploaded face so you can compare characters before saving.</p>
-            </fieldset>
-            <div>
-              <label htmlFor="mascot" className="label">
-                Face photo
-              </label>
-              <input
-                id="mascot"
-                name="mascot"
-                type="file"
-                accept="image/*"
-                className="input"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) {
-                    setMascotPreview(URL.createObjectURL(f));
-                    setRemoveMascot(false);
-                  }
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">A straight-on headshot works best. The photo is cropped to a circle; use the sliders to centre the face. Without a photo, a cartoon face is used.</p>
-              {mascotPreview && !removeMascot && (
-                <button type="button" onClick={() => { setRemoveMascot(true); setMascotPreview(null); }} className="mt-1 text-xs text-red-700 hover:underline">
-                  Remove photo
-                </button>
-              )}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="mascotFaceZoom" className="label">
-                  Zoom ({mascotZoom}%)
-                </label>
-                <input id="mascotFaceZoom" name="mascotFaceZoom" type="range" min={100} max={250} step={5} value={mascotZoom} onChange={(e) => setMascotZoom(Number(e.target.value))} className="w-full" />
-              </div>
-              <div>
-                <label htmlFor="mascotFaceRotate" className="label">
-                  Tilt ({mascotRotate}°)
-                </label>
-                <input id="mascotFaceRotate" name="mascotFaceRotate" type="range" min={-45} max={45} step={1} value={mascotRotate} onChange={(e) => setMascotRotate(Number(e.target.value))} className="w-full" />
-              </div>
-              <div>
-                <label htmlFor="mascotFaceOffsetX" className="label">
-                  Move face left / right ({mascotOffsetX})
-                </label>
-                <input id="mascotFaceOffsetX" name="mascotFaceOffsetX" type="range" min={-40} max={40} step={2} value={mascotOffsetX} onChange={(e) => setMascotOffsetX(Number(e.target.value))} className="w-full" />
-              </div>
-              <div>
-                <label htmlFor="mascotFaceOffsetY" className="label">
-                  Move face up / down ({mascotOffset})
-                </label>
-                <input id="mascotFaceOffsetY" name="mascotFaceOffsetY" type="range" min={-40} max={40} step={2} value={mascotOffset} onChange={(e) => setMascotOffset(Number(e.target.value))} className="w-full" />
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" name="mascotFaceFlip" checked={mascotFlip} onChange={(e) => setMascotFlip(e.target.checked)} className="h-4 w-4" />
-                Mirror the photo
-              </label>
-              <button type="button" onClick={() => { setMascotZoom(100); setMascotOffsetX(0); setMascotOffset(0); setMascotRotate(0); setMascotFlip(false); }} className="text-xs text-blue-700 hover:underline">
-                Reset face position
-              </button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <label htmlFor="mascotCaption" className="label">
-                  Caption (English)
-                </label>
-                <input id="mascotCaption" name="mascotCaption" value={mascotCaption} onChange={(e) => setMascotCaption(e.target.value)} className="input" placeholder="Happy holidays from Dave in Plant 2!" />
-              </div>
-              <div>
-                <label htmlFor="mascotCaptionEs" className="label">
-                  Caption (Spanish)
-                </label>
-                <input id="mascotCaptionEs" name="mascotCaptionEs" defaultValue={campaign.mascotCaptionEs} className="input" placeholder="¡Felices fiestas de parte de Dave!" />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="mascotShowOnDone" defaultChecked={campaign.mascotShowOnDone} className="h-4 w-4" />
-              Also show a small elf on the thank-you page
-            </label>
-          </div>
-        </div>
-      </section>
+      <MascotsEditor initialEnabled={campaign.mascotEnabled} initialMascots={campaign.mascots} />
 
       <div className="flex items-center gap-3">
         <button disabled={pending} className="btn-primary">

@@ -8,6 +8,7 @@ import { getLang } from "@/lib/lang";
 import { qrDataUrl } from "@/lib/qr";
 import { optionDetail } from "@/lib/options";
 import { DancingMascot } from "@/components/dancing-mascot";
+import { mascotFaceProps } from "@/lib/mascot";
 import { ItemThumb } from "@/components/item-thumb";
 import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
@@ -20,9 +21,10 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
   if (!session) redirect(`/g/${slug}`);
   if (session.preview) redirect(`/g/${slug}/pick`);
 
-  const [selection, employee] = await Promise.all([
+  const [selection, employee, mascots] = await Promise.all([
     db.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: session.employeeId } }, include: { item: { include: { images: true } } } }),
     db.employee.findUniqueOrThrow({ where: { id: session.employeeId } }),
+    campaign.mascotEnabled ? db.campaignMascot.findMany({ where: { campaignId: campaign.id, showOnDone: true }, orderBy: { sortOrder: "asc" }, take: 3 }) : Promise.resolve([]),
   ]);
   if (!selection) redirect(`/g/${slug}/pick`);
   if (selection.status === "NEEDS_REPICK" && campaignAcceptsPicks(campaign).ok) redirect(`/g/${slug}/pick`);
@@ -37,25 +39,29 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="card overflow-hidden">
-        <div className="flex items-center justify-center gap-4 p-6 text-center" style={{ background: `linear-gradient(135deg, ${campaign.primaryColor}, ${campaign.accentColor})` }}>
-          {campaign.mascotEnabled && campaign.mascotShowOnDone && (
-            <DancingMascot
-              kind={campaign.mascotKind}
-              faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
-              faceZoom={campaign.mascotFaceZoom}
-              faceOffsetX={campaign.mascotFaceOffsetX}
-              faceOffsetY={campaign.mascotFaceOffsetY}
-              faceRotate={campaign.mascotFaceRotate}
-              faceFlip={campaign.mascotFaceFlip}
-              size={90}
-              snow={false}
-              tapHint={t.mascot.tap}
-            />
+        <div className="flex flex-wrap items-center justify-center gap-4 p-6 text-center" data-done-mascots={mascots.length} style={{ background: `linear-gradient(135deg, ${campaign.primaryColor}, ${campaign.accentColor})` }}>
+          {/* Phones: all mascots in one row above the title. Wider screens: they flank the title. */}
+          {mascots.length > 1 && (
+            <div className="flex w-full items-end justify-center gap-3 sm:hidden">
+              {mascots.map((m) => (
+                <DancingMascot key={m.id} {...mascotFaceProps(m)} size={70} snow={false} tapHint={t.mascot.tap} />
+              ))}
+            </div>
+          )}
+          {mascots[0] && (
+            <div className={mascots.length > 1 ? "hidden sm:block" : ""}>
+              <DancingMascot {...mascotFaceProps(mascots[0])} size={mascots.length > 1 ? 80 : 90} snow={false} tapHint={t.mascot.tap} />
+            </div>
           )}
           <div>
             <div className="text-4xl">🎉</div>
             <h1 className="mt-2 text-2xl font-bold text-white">{fill(t.done.thanks, { name: employee.firstName })}</h1>
           </div>
+          {mascots.slice(1).map((m) => (
+            <div key={m.id} className="hidden sm:block">
+              <DancingMascot {...mascotFaceProps(m)} size={80} snow={false} tapHint={t.mascot.tap} />
+            </div>
+          ))}
         </div>
         <div className="grid gap-6 p-6 sm:grid-cols-5">
           <div className="sm:col-span-2">

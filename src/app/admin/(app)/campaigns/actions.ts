@@ -142,11 +142,11 @@ export async function setCampaignStatusAction(formData: FormData): Promise<void>
 export async function duplicateCampaignAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
   const sourceId = s(formData, "id");
-  const source = await db.campaign.findUnique({ where: { id: sourceId }, include: { items: true, employees: true } });
+  const source = await db.campaign.findUnique({ where: { id: sourceId }, include: { items: true, employees: true, mascots: true } });
   if (!source) return;
   let slug = slugify(`${source.slug}-copy`);
   if (await db.campaign.findUnique({ where: { slug } })) slug = `${slug}-${randomBytes(2).toString("hex")}`;
-  const { id: _id, createdAt: _c, updatedAt: _u, feedToken: _f, items, employees, ...rest } = source;
+  const { id: _id, createdAt: _c, updatedAt: _u, feedToken: _f, items, employees, mascots, ...rest } = source;
   void _id; void _c; void _u; void _f;
   const copy = await db.campaign.create({
     data: {
@@ -159,6 +159,13 @@ export async function duplicateCampaignAction(formData: FormData): Promise<void>
       lastHrEmailAt: null,
       items: { create: items.map((ci) => ({ itemId: ci.itemId, sortOrder: ci.sortOrder, stockLimit: ci.stockLimit, unitCostOverride: ci.unitCostOverride, enabledOption1Values: ci.enabledOption1Values, enabledOption2Values: ci.enabledOption2Values })) },
       employees: { create: employees.map((e) => ({ employeeId: e.employeeId, budgetOverride: e.budgetOverride })) },
+      mascots: {
+        create: mascots.map((m) => {
+          const { id: _mid, campaignId: _cid, createdAt: _mc, ...mascot } = m;
+          void _mid; void _cid; void _mc;
+          return mascot;
+        }),
+      },
     },
   });
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "campaign.duplicated", entityType: "Campaign", entityId: copy.id, meta: { from: source.id } });
@@ -239,6 +246,56 @@ async function storeUpload(formData: FormData, key: string): Promise<string | nu
   return undefined;
 }
 
+const MAX_MASCOTS = 6;
+
+const clampInt = (raw: string, min: number, max: number, fallback: number) => {
+  const n = Math.round(Number(raw));
+  return raw !== "" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+
+/**
+ * Save the Branding form's mascot cards. Each card posts `mascot:<key>:<field>`; `mascotKeys` gives the
+ * order and `mascotDelete` lists removed mascots. New cards have an empty id.
+ */
+async function saveMascots(campaignId: string, formData: FormData): Promise<void> {
+  const deleteIds = formData.getAll("mascotDelete").map(String).filter(Boolean);
+  if (deleteIds.length > 0) await db.campaignMascot.deleteMany({ where: { campaignId, id: { in: deleteIds } } });
+  const keys = [...new Set(formData.getAll("mascotKeys").map(String).filter(Boolean))].slice(0, MAX_MASCOTS);
+  for (let order = 0; order < keys.length; order += 1) {
+    const key = keys[order];
+    const f = (field: string) => s(formData, `mascot:${key}:${field}`);
+    const on = (field: string) => formData.get(`mascot:${key}:${field}`) === "on";
+    let imageId: string | null | undefined;
+    const file = formData.get(`mascot:${key}:face`);
+    if (file instanceof File && file.size > 0) {
+      const processed = await processImage(Buffer.from(await file.arrayBuffer()), file.type);
+      imageId = (await db.image.create({ data: processed })).id;
+    } else if (f("removePhoto") === "1") {
+      imageId = null;
+    }
+    const kind = f("kind");
+    const data = {
+      kind: isMascotKind(kind) ? kind : "elf",
+      caption: f("caption") || null,
+      captionEs: f("captionEs") || null,
+      faceZoom: clampInt(f("faceZoom"), 100, 250, 100),
+      faceOffsetX: clampInt(f("faceOffsetX"), -40, 40, 0),
+      faceOffsetY: clampInt(f("faceOffsetY"), -40, 40, 0),
+      faceRotate: clampInt(f("faceRotate"), -45, 45, 0),
+      faceFlip: on("faceFlip"),
+      showOnLanding: on("showOnLanding"),
+      showOnDone: on("showOnDone"),
+      showOnPoster: on("showOnPoster"),
+      sortOrder: order,
+      ...(imageId !== undefined ? { imageId } : {}),
+    };
+    const existingId = f("id");
+    const existing = existingId ? await db.campaignMascot.findFirst({ where: { id: existingId, campaignId } }) : null;
+    if (existing) await db.campaignMascot.update({ where: { id: existing.id }, data });
+    else await db.campaignMascot.create({ data: { ...data, campaignId } });
+  }
+}
+
 export async function updateBrandingAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const admin = await requireAdmin();
   const id = s(formData, "id");
@@ -249,18 +306,17 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
   if (!isHexColor(primaryColor) || !isHexColor(accentColor)) return { error: "Colours must be hex values like #1d4ed8." };
   let logoImageId: string | null | undefined;
   let heroImageId: string | null | undefined;
-  let mascotImageId: string | null | undefined;
   try {
     logoImageId = await storeUpload(formData, "logo");
     heroImageId = await storeUpload(formData, "hero");
-    mascotImageId = await storeUpload(formData, "mascot");
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not process an image." };
   }
-  const clampInt = (raw: string, min: number, max: number, fallback: number) => {
-    const n = Math.round(Number(raw));
-    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
-  };
+  try {
+    await saveMascots(id, formData);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not save the mascots." };
+  }
   await db.campaign.update({
     where: { id },
     data: {
@@ -280,18 +336,8 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
       showPickCount: formData.get("showPickCount") === "on",
       notifyEmployeesOnReceived: formData.get("notifyEmployeesOnReceived") === "on",
       mascotEnabled: formData.get("mascotEnabled") === "on",
-      mascotCaption: s(formData, "mascotCaption") || null,
-      mascotCaptionEs: s(formData, "mascotCaptionEs") || null,
-      mascotShowOnDone: formData.get("mascotShowOnDone") === "on",
-      mascotKind: isMascotKind(s(formData, "mascotKind")) ? s(formData, "mascotKind") : "elf",
-      mascotFaceZoom: clampInt(s(formData, "mascotFaceZoom"), 100, 250, 100),
-      mascotFaceOffsetX: clampInt(s(formData, "mascotFaceOffsetX"), -40, 40, 0),
-      mascotFaceOffsetY: clampInt(s(formData, "mascotFaceOffsetY"), -40, 40, 0),
-      mascotFaceRotate: clampInt(s(formData, "mascotFaceRotate"), -45, 45, 0),
-      mascotFaceFlip: formData.get("mascotFaceFlip") === "on",
       ...(logoImageId !== undefined ? { logoImageId } : {}),
       ...(heroImageId !== undefined ? { heroImageId } : {}),
-      ...(mascotImageId !== undefined ? { mascotImageId } : {}),
     },
   });
   await audit({ actorType: "ADMIN", actorId: admin.id, action: "campaign.branding_updated", entityType: "Campaign", entityId: id });

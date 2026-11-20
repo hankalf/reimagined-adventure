@@ -223,26 +223,48 @@ try {
   assert(anonExport.status() === 401, "export requires an admin login");
   ok("Export to Excel downloads the filtered employee list in the upload layout");
 
-  section("Branding: enable the dancing elf with an uploaded face");
+  section("Branding: two mascots with different placements (home page, thank-you page, poster)");
   const face = await sharp({ create: { width: 400, height: 400, channels: 3, background: { r: 250, g: 210, b: 170 } } }).png().toBuffer();
   const facePath = path.join(SHOTS, "face.png");
   fs.writeFileSync(facePath, face);
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/branding`);
-  await a.check('input[name="mascotEnabled"]');
-  await a.locator("label", { hasText: "Dancing banana" }).click();
-  await a.setInputFiles("#mascot", facePath);
   await a.fill("#videoUrl", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  await a.fill("#mascotCaption", `Happy holidays from the plant manager ${run}!`);
-  await a.fill("#mascotCaptionEs", `¡Felices fiestas de parte del gerente ${run}!`);
+  // Mascot 1: dancing banana with a face, on home page + thank-you page + poster.
+  await a.click("[data-mascot-add]");
+  const card1 = a.locator("[data-mascot-card]").nth(0);
+  await card1.locator("label", { hasText: "Dancing banana" }).click();
+  await card1.locator("[data-mascot-face]").setInputFiles(facePath);
+  await card1.locator('input[name$=":caption"]').fill(`Happy holidays from the plant manager ${run}!`);
+  await card1.locator('input[name$=":captionEs"]').fill(`¡Felices fiestas de parte del gerente ${run}!`);
+  assert(await card1.locator('input[name$=":showOnDone"]').isChecked(), "first mascot defaults to the thank-you page too");
+  // Mascot 2: Santa, thank-you page only.
+  await a.click("[data-mascot-add]");
+  const card2 = a.locator("[data-mascot-card]").nth(1);
+  await card2.locator("label", { hasText: "Santa" }).click();
+  await card2.locator('input[name$=":showOnLanding"]').uncheck();
+  await card2.locator('input[name$=":showOnDone"]').check();
+  assert(await a.locator('input[name="mascotEnabled"]').isChecked(), "adding a mascot turns mascots on");
   await a.click('button:has-text("Save branding")');
   await a.waitForSelector("text=Branding saved.");
   await a.reload();
-  const faceHref = await a.locator("[data-elf]:not([data-still='1']) image").first().getAttribute("href");
-  assert(faceHref && faceHref.includes("/api/images/"), `branding preview shows the uploaded face (${faceHref})`);
-  assert((await a.locator("[data-mascot-picker] [data-elf]").count()) === 8, "picker shows a miniature of every character");
-  assert((await a.locator("[data-mascot-picker] [data-elf] image").count()) === 8, "every miniature wears the uploaded face");
-  ok("elf enabled with an uploaded face and bilingual caption");
-  await shot(a, "branding-elf");
+  assert((await a.locator("[data-mascot-card]").count()) === 2, "both mascots saved");
+  const faceHref = await a.locator("[data-mascot-card]").nth(0).locator("[data-elf]:not([data-still='1']) image").first().getAttribute("href");
+  assert(faceHref && faceHref.includes("/api/images/"), `banana preview wears the uploaded face (${faceHref})`);
+  assert((await a.locator("[data-mascot-card]").nth(0).locator("[data-mascot-picker] [data-elf] image").count()) === 8, "every miniature in the picker wears the uploaded face");
+  assert((await a.locator("[data-mascot-card]").nth(1).locator('input[name$=":kind"][value="santa"]').isChecked()), "second mascot is Santa");
+  assert(!(await a.locator("[data-mascot-card]").nth(1).locator('input[name$=":showOnLanding"]').isChecked()), "Santa is not on the home page");
+  ok("two mascots saved: banana (home, thank-you, poster) and Santa (thank-you only)");
+  await shot(a, "branding-mascots");
+
+  // A third mascot can be added and removed again.
+  await a.click("[data-mascot-add]");
+  assert((await a.locator("[data-mascot-card]").count()) === 3, "third mascot card added");
+  await a.locator("[data-mascot-card]").nth(2).locator("[data-mascot-remove]").click();
+  await a.click('button:has-text("Save branding")');
+  await a.waitForSelector("text=Branding saved.");
+  await a.reload();
+  assert((await a.locator("[data-mascot-card]").count()) === 2, "removed mascot is not saved");
+  ok("mascots can be added and removed");
 
   section("Launch checklist blocks opening an empty campaign; preview as employee works");
   await a.goto(`${BASE}/admin/campaigns/new`);
@@ -284,7 +306,7 @@ try {
   ok("campaign is open; QR PNG and SVG endpoints work");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/poster`);
   await a.waitForSelector("text=Escanea para elegir tu regalo");
-  assert((await a.locator("[data-elf][data-mascot='banana']").count()) === 1, "poster shows the chosen mascot");
+  assert((await a.locator("[data-elf][data-mascot='banana']").count()) === 1 && (await a.locator("[data-elf]").count()) === 1, "poster shows only the mascot placed on the poster (banana)");
   assert((await a.locator("[data-poster-gift]").count()) === 4, "poster lists the 4 gifts shown in the campaign");
   const posterMugImg = await a.locator("[data-poster-gift]", { hasText: `E2E Mug ${run}` }).locator("img").getAttribute("src");
   assert(posterMugImg && posterMugImg.includes("/api/images/") && posterMugImg.includes("thumb=1"), "poster uses the gift thumbnails");
@@ -332,8 +354,8 @@ try {
   await e.goto(`${BASE}/g/${SLUG}`);
   await e.waitForSelector("text=Número de empleado");
   ok("landing page rendered in Spanish from Accept-Language");
-  const elf = e.locator("[data-elf]");
-  assert((await elf.count()) === 1, "dancing mascot shown on the landing page");
+  const elf = e.locator("[data-landing-mascots] [data-elf]");
+  assert((await elf.count()) === 1, "only the home-page mascot is shown on the landing page");
   assert((await elf.getAttribute("data-mascot")) === "banana", "the chosen character (dancing banana) is rendered");
   assert((await e.locator("[data-video] iframe").getAttribute("src"))?.includes("youtube-nocookie.com/embed/dQw4w9WgXcQ"), "thank-you video embedded");
   assert((await e.locator(`text=¡Felices fiestas de parte del gerente ${run}!`).count()) === 1, "Spanish caption shown");
@@ -389,6 +411,8 @@ try {
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   await e.waitForSelector("text=Código de confirmación");
   await e.waitForSelector("text=Size: M");
+  const doneMascots = await e.locator("[data-done-mascots] [data-elf]:visible").evaluateAll((els) => els.map((el) => el.getAttribute("data-mascot")));
+  assert(doneMascots.join(",") === "banana,santa", `thank-you page shows both thank-you mascots (${doneMascots.join(",")})`);
   const code = (await e.locator("dd.font-mono").first().textContent()).trim();
   assert(/^[A-Z2-9]{6}$/.test(code), `confirmation code looks right (${code})`);
   ok(`hoodie size M confirmed; code ${code}`);

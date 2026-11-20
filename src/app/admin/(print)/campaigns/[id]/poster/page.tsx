@@ -7,6 +7,7 @@ import { FitToPage } from "./fit-to-page";
 import { DancingMascot } from "@/components/dancing-mascot";
 import { ItemThumb } from "@/components/item-thumb";
 import { imageSrc } from "@/lib/image-src";
+import { mascotFaceProps } from "@/lib/mascot";
 
 /** Max gift tiles on one Letter page; beyond this the last tile becomes "+N more". */
 const MAX_TILES = 24;
@@ -39,6 +40,10 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
       )
     : [];
   const L = posterLayout(gifts.length);
+  const posterMascots = campaign.mascotEnabled ? await db.campaignMascot.findMany({ where: { campaignId: id, showOnPoster: true }, orderBy: { sortOrder: "asc" }, take: 2 }) : [];
+  // Two mascots flank the QR code; shrink them so the row stays within the 7.7 in printable width.
+  const mascotIn = posterMascots.length > 1 ? Math.min(L.mascotIn, (7.7 - L.qrIn - 0.6) / 2) : L.mascotIn;
+  const mascotEl = (m: (typeof posterMascots)[number]) => <DancingMascot key={m.id} {...mascotFaceProps(m)} still snow={false} size={Math.round(mascotIn * PX_PER_IN)} />;
   const overflow = gifts.length > MAX_TILES;
   const shown = overflow ? gifts.slice(0, MAX_TILES - 1) : gifts;
   const moreCount = gifts.length - shown.length;
@@ -96,22 +101,10 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
 
           <section className="w-full">
             <div className="flex items-center justify-center gap-[0.3in]">
-              {campaign.mascotEnabled && (
-                <DancingMascot
-                  kind={campaign.mascotKind}
-                  still
-                  snow={false}
-                  size={Math.round(L.mascotIn * PX_PER_IN)}
-                  faceSrc={campaign.mascotImageId ? `/api/images/${campaign.mascotImageId}?thumb=1` : null}
-                  faceZoom={campaign.mascotFaceZoom}
-                  faceOffsetX={campaign.mascotFaceOffsetX}
-                  faceOffsetY={campaign.mascotFaceOffsetY}
-                  faceRotate={campaign.mascotFaceRotate}
-                  faceFlip={campaign.mascotFaceFlip}
-                />
-              )}
+              {posterMascots[0] && mascotEl(posterMascots[0])}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/campaigns/${campaign.slug}/qr?size=1024`} alt="QR code" data-poster-qr style={{ width: `${L.qrIn}in`, height: `${L.qrIn}in` }} />
+              {posterMascots[1] && mascotEl(posterMascots[1])}
             </div>
             <p className="mt-[0.08in] font-bold leading-tight" style={{ fontSize: "20pt" }}>
               Scan to choose your gift

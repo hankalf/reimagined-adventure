@@ -3,7 +3,7 @@ import { BrandingForm } from "./branding-form";
 
 export default async function BrandingPage({ params }: PageProps<"/admin/campaigns/[id]/branding">) {
   const { id } = await params;
-  const c = await db.campaign.findUniqueOrThrow({ where: { id } });
+  const c = await db.campaign.findUniqueOrThrow({ where: { id }, include: { mascots: { orderBy: { sortOrder: "asc" } } } });
   return (
     <BrandingForm
       campaign={{
@@ -24,16 +24,21 @@ export default async function BrandingPage({ params }: PageProps<"/admin/campaig
         leadershipMessageEs: c.leadershipMessageEs ?? "",
         leadershipName: c.leadershipName ?? "",
         mascotEnabled: c.mascotEnabled,
-        mascotImageId: c.mascotImageId,
-        mascotCaption: c.mascotCaption ?? "",
-        mascotCaptionEs: c.mascotCaptionEs ?? "",
-        mascotShowOnDone: c.mascotShowOnDone,
-        mascotKind: c.mascotKind,
-        mascotFaceZoom: c.mascotFaceZoom,
-        mascotFaceOffsetX: c.mascotFaceOffsetX,
-        mascotFaceOffsetY: c.mascotFaceOffsetY,
-        mascotFaceRotate: c.mascotFaceRotate,
-        mascotFaceFlip: c.mascotFaceFlip,
+        mascots: c.mascots.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          imageId: m.imageId,
+          caption: m.caption ?? "",
+          captionEs: m.captionEs ?? "",
+          faceZoom: m.faceZoom,
+          faceOffsetX: m.faceOffsetX,
+          faceOffsetY: m.faceOffsetY,
+          faceRotate: m.faceRotate,
+          faceFlip: m.faceFlip,
+          showOnLanding: m.showOnLanding,
+          showOnDone: m.showOnDone,
+          showOnPoster: m.showOnPoster,
+        })),
         videoUrl: c.videoUrl ?? "",
         showPickCount: c.showPickCount,
         notifyEmployeesOnReceived: c.notifyEmployeesOnReceived,

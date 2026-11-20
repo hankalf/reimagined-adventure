@@ -29,6 +29,8 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
   const message = localized(lang, campaign.welcomeMessage, campaign.welcomeMessageEs);
   const leadership = campaign.leadershipMessage ? localized(lang, campaign.leadershipMessage, campaign.leadershipMessageEs) : null;
 
+  const hasMore = pickCount >= 3 || Boolean(video) || Boolean(leadership) || mascots.length > 0;
+
   let deadline: string | null = null;
   if (campaign.closesAt && window.ok) {
     const days = daysUntil(campaign.closesAt);
@@ -36,61 +38,36 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 md:py-12">
+    <main className="safe-x mx-auto max-w-6xl py-6 md:py-12">
       {previewing && previewEmployee && (
         <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-preview-banner>
           {fill(t.landing.previewBanner, { name: `${previewEmployee.firstName} ${previewEmployee.lastName}` })}
         </div>
       )}
-      <div className="grid gap-8 md:grid-cols-5 md:items-start">
-        <section className="md:col-span-3">
+      {/* Phones: headline, then the sign-in card, then everything else. Wider screens: sign-in card on the right. */}
+      <div className="grid gap-6 md:grid-cols-5 md:items-start md:gap-x-8 md:gap-y-0">
+        <section className="md:col-span-3 md:row-start-1" data-landing-intro>
           {campaign.heroImageId && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/api/images/${campaign.heroImageId}`} alt="" className="mb-6 h-56 w-full rounded-2xl object-cover shadow-sm md:h-72" />
+            <img src={`/api/images/${campaign.heroImageId}`} alt="" className="mb-5 h-40 w-full rounded-2xl object-cover shadow-sm sm:h-56 md:mb-6 md:h-72" />
           )}
-          <h1 className="theme-text text-3xl font-bold tracking-tight text-slate-900 md:text-4xl" style={{ color: campaign.primaryColor }}>
+          <h1 className="theme-text text-[1.75rem] leading-tight font-bold tracking-tight text-slate-900 sm:text-3xl md:text-4xl" style={{ color: campaign.primaryColor }}>
             {headline}
           </h1>
-          {message && <p className="theme-muted mt-4 whitespace-pre-line text-lg text-slate-700">{message}</p>}
+          {message && <p className="theme-muted mt-3 whitespace-pre-line text-base text-slate-700 sm:text-lg md:mt-4">{message}</p>}
           {deadline && (
-            <p className="theme-pill mt-4 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-sm font-medium text-slate-800" style={{ backgroundColor: `${campaign.accentColor}26` }}>
+            <p
+              className="theme-pill mt-4 inline-flex flex-wrap items-center gap-x-2 rounded-2xl bg-accent/15 px-3 py-1.5 text-sm font-medium text-slate-800 sm:rounded-full"
+              style={{ backgroundColor: `${campaign.accentColor}26` }}
+            >
               ⏳ {deadline}
               {campaign.closesAt && <span className="text-slate-500">· {fill(t.landing.closesOn, { date: formatDate(campaign.closesAt, lang) })}</span>}
             </p>
           )}
-          {pickCount >= 3 && <p className="theme-muted mt-3 text-sm text-slate-600" data-pick-count>👥 {fill(t.landing.pickCount, { n: pickCount })}</p>}
-          {video && (
-            <div className="mt-6 overflow-hidden rounded-2xl bg-black shadow-sm" data-video>
-              {video.kind === "iframe" ? (
-                <iframe src={video.src} title={t.landing.watchVideo} className="aspect-video w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-              ) : (
-                <video src={video.src} controls playsInline className="aspect-video w-full" />
-              )}
-            </div>
-          )}
-          {leadership && (
-            <blockquote className="mt-8 rounded-2xl border-l-4 bg-white p-5 shadow-sm" style={{ borderColor: campaign.accentColor }}>
-              <p className="whitespace-pre-line text-slate-700 italic">“{leadership}”</p>
-              {campaign.leadershipName && <footer className="mt-3 text-sm font-medium text-slate-600">— {campaign.leadershipName}</footer>}
-            </blockquote>
-          )}
-          {mascots.length > 0 && (
-            <div className="mt-8 flex flex-wrap items-end justify-center gap-4 md:justify-start" data-landing-mascots>
-              {mascots.map((m) => (
-                <DancingMascot
-                  key={m.id}
-                  {...mascotFaceProps(m)}
-                  caption={m.caption ? localized(lang, m.caption, m.captionEs) : null}
-                  tapHint={t.mascot.tap}
-                  size={landingMascotSize(mascots.length)}
-                />
-              ))}
-            </div>
-          )}
         </section>
 
-        <section className="md:col-span-2">
-          <div className="card p-6">
+        <section className="md:col-span-2 md:col-start-4 md:row-span-2 md:row-start-1" data-landing-signin>
+          <div className="card p-5 sm:p-6">
             <h2 className="mb-4 text-lg font-semibold text-slate-900">{t.landing.enterDetails}</h2>
             {previewing ? (
               <a href={`/g/${slug}/pick`} className="btn w-full bg-brand py-3 text-base text-white hover:opacity-90">
@@ -112,6 +89,40 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
             )}
           </div>
         </section>
+
+        {hasMore && (
+        <section className="md:col-span-3 md:row-start-2" data-landing-more>
+          {pickCount >= 3 && <p className="theme-muted mt-3 text-sm text-slate-600" data-pick-count>👥 {fill(t.landing.pickCount, { n: pickCount })}</p>}
+          {video && (
+            <div className="mt-4 overflow-hidden rounded-2xl bg-black shadow-sm md:mt-6" data-video>
+              {video.kind === "iframe" ? (
+                <iframe src={video.src} title={t.landing.watchVideo} className="aspect-video w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              ) : (
+                <video src={video.src} controls playsInline className="aspect-video w-full" />
+              )}
+            </div>
+          )}
+          {leadership && (
+            <blockquote className="mt-6 rounded-2xl border-l-4 bg-white p-5 shadow-sm md:mt-8" style={{ borderColor: campaign.accentColor }}>
+              <p className="whitespace-pre-line text-slate-700 italic">“{leadership}”</p>
+              {campaign.leadershipName && <footer className="mt-3 text-sm font-medium text-slate-600">— {campaign.leadershipName}</footer>}
+            </blockquote>
+          )}
+          {mascots.length > 0 && (
+            <div className="mt-6 flex flex-wrap items-end justify-center gap-4 md:mt-8 md:justify-start" data-landing-mascots>
+              {mascots.map((m) => (
+                <DancingMascot
+                  key={m.id}
+                  {...mascotFaceProps(m)}
+                  caption={m.caption ? localized(lang, m.caption, m.captionEs) : null}
+                  tapHint={t.mascot.tap}
+                  size={landingMascotSize(mascots.length)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+        )}
       </div>
     </main>
   );

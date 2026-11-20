@@ -5,7 +5,7 @@ import { audit } from "./audit";
 import { effectiveItemCost, employeeBudget, isOverBudget, COMMITTED_STATUSES } from "./budget";
 import {
   campaignAcceptsPicks,
-  canChangeSelection,
+  changeState,
   employeeNumberCandidates,
   generateConfirmationCode,
   itemAvailability,
@@ -131,6 +131,7 @@ export type SubmitError =
   | "not_eligible"
   | "already_picked"
   | "cannot_change"
+  | "change_window_closed"
   | "unavailable"
   | "over_budget"
   | "option_required"
@@ -165,7 +166,11 @@ export async function submitSelection(input: {
         async (tx) => {
           const existing = await tx.selection.findUnique({ where: { campaignId_employeeId: { campaignId: campaign.id, employeeId: input.employeeId } } });
           if (existing) {
-            if (!canChangeSelection(existing.status, campaign.allowChangeUntilOrdered)) {
+            const state = changeState(existing, campaign);
+            // HR picking on someone's behalf is not bound by the employee's change window.
+            const hrOverride = !state.ok && state.reason === "window_closed" && Boolean(input.onBehalfOfAdminId);
+            if (!state.ok && !hrOverride) {
+              if (state.reason === "window_closed") return { ok: false as const, error: "change_window_closed" as const };
               return { ok: false as const, error: existing.status === "SELECTED" ? ("already_picked" as const) : ("cannot_change" as const) };
             }
           }
@@ -198,6 +203,8 @@ export async function submitSelection(input: {
             orderedAt: null,
             receivedAt: null,
             collectedAt: null,
+            // A forced re-pick (gift out of stock, colour removed) starts a fresh change window.
+            ...(existing?.status === "NEEDS_REPICK" ? { firstSelectedAt: new Date() } : {}),
           };
 
           let selectionId: string;

@@ -220,3 +220,43 @@ html.a11y-contrast .text-slate-600 {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
+
+/* ---- Phones (iPhone and Android) ---- */
+html {
+  /* No font inflation when an iPhone is turned sideways. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* iOS Safari zooms into any text field smaller than 16px when it is tapped; keep fields at 16px on phones. */
+@media (max-width: 767px) {
+  .input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+/* Employee pages: instant taps (no double-tap-zoom delay) and no grey flash on tap. */
+[data-page-theme] a,
+[data-page-theme] button,
+[data-page-theme] label,
+[data-page-theme] summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Edge-to-edge pages (viewport-fit=cover): keep content clear of the notch, rounded corners and home bar. */
+.safe-x {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

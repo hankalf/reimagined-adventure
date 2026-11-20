@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   campaignAcceptsPicks,
   canChangeSelection,
+  changeDeadline,
+  changeState,
   employeeNumberCandidates,
   generateConfirmationCode,
   itemAvailability,
@@ -99,11 +101,28 @@ describe("campaignAcceptsPicks", () => {
 });
 
 describe("canChangeSelection", () => {
+  const first = new Date("2026-12-01T15:00:00Z");
+  const at = (h: number) => new Date(first.getTime() + h * 3_600_000);
+  const open = { allowChangeUntilOrdered: true, changeWindowHours: null };
   it("allows re-pick always, change only while SELECTED and permitted", () => {
-    expect(canChangeSelection("NEEDS_REPICK", false)).toBe(true);
-    expect(canChangeSelection("SELECTED", true)).toBe(true);
-    expect(canChangeSelection("SELECTED", false)).toBe(false);
-    expect(canChangeSelection("ORDERED", true)).toBe(false);
+    expect(canChangeSelection({ status: "NEEDS_REPICK", firstSelectedAt: first }, { allowChangeUntilOrdered: false, changeWindowHours: 4 }, at(100))).toBe(true);
+    expect(canChangeSelection({ status: "SELECTED", firstSelectedAt: first }, open, at(100))).toBe(true);
+    expect(canChangeSelection({ status: "SELECTED", firstSelectedAt: first }, { ...open, allowChangeUntilOrdered: false }, at(0))).toBe(false);
+    expect(canChangeSelection({ status: "ORDERED", firstSelectedAt: first }, open, at(0))).toBe(false);
+  });
+  it("closes the change window N hours after the first pick", () => {
+    const policy = { allowChangeUntilOrdered: true, changeWindowHours: 4 };
+    const sel = { status: "SELECTED", firstSelectedAt: first };
+    expect(changeState(sel, policy, at(0))).toEqual({ ok: true, deadline: at(4) });
+    expect(changeState(sel, policy, at(3.99)).ok).toBe(true);
+    expect(changeState(sel, policy, at(4))).toEqual({ ok: false, reason: "window_closed", deadline: at(4) });
+    expect(changeState({ status: "ORDERED", firstSelectedAt: first }, policy, at(1))).toMatchObject({ ok: false, reason: "ordered" });
+    expect(changeState(sel, { allowChangeUntilOrdered: false, changeWindowHours: 4 }, at(1))).toEqual({ ok: false, reason: "final", deadline: null });
+  });
+  it("treats a blank window as 'until HR orders'", () => {
+    expect(changeDeadline(first, null)).toBeNull();
+    expect(changeDeadline(first, 0)).toBeNull();
+    expect(changeDeadline(first, 24)).toEqual(at(24));
   });
 });
 

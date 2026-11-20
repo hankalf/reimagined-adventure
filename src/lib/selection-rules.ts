@@ -101,10 +101,40 @@ export function campaignAcceptsPicks(c: CampaignWindow, now = new Date()): { ok:
   return { ok: true };
 }
 
-/** Which selection statuses still allow the employee to change their mind (when the campaign permits it). */
-export function canChangeSelection(status: string, allowChangeUntilOrdered: boolean): boolean {
-  if (status === "NEEDS_REPICK") return true;
-  return allowChangeUntilOrdered && status === "SELECTED";
+export type ChangePolicy = { allowChangeUntilOrdered: boolean; changeWindowHours: number | null };
+export const MAX_CHANGE_WINDOW_HOURS = 24 * 90;
+
+/** When the employee's chance to change their gift ends, or null when only HR ordering ends it. */
+export function changeDeadline(firstSelectedAt: Date, changeWindowHours: number | null | undefined): Date | null {
+  if (changeWindowHours == null || !Number.isFinite(changeWindowHours) || changeWindowHours <= 0) return null;
+  return new Date(firstSelectedAt.getTime() + changeWindowHours * 3_600_000);
+}
+
+export type ChangeState =
+  | { ok: true; deadline: Date | null }
+  | { ok: false; reason: "final" | "ordered" | "window_closed"; deadline: Date | null };
+
+/**
+ * Whether the employee may still change their pick:
+ * - a forced re-pick (gift out of stock, colour removed) is always allowed;
+ * - otherwise only while the pick is not yet ordered, the campaign allows changes, and the change window
+ *   (N hours after the first pick) has not passed.
+ */
+export function changeState(
+  selection: { status: string; firstSelectedAt: Date },
+  policy: ChangePolicy,
+  now: Date = new Date(),
+): ChangeState {
+  const deadline = policy.allowChangeUntilOrdered ? changeDeadline(selection.firstSelectedAt, policy.changeWindowHours) : null;
+  if (selection.status === "NEEDS_REPICK") return { ok: true, deadline: null };
+  if (selection.status !== "SELECTED") return { ok: false, reason: "ordered", deadline };
+  if (!policy.allowChangeUntilOrdered) return { ok: false, reason: "final", deadline };
+  if (deadline && now >= deadline) return { ok: false, reason: "window_closed", deadline };
+  return { ok: true, deadline };
+}
+
+export function canChangeSelection(selection: { status: string; firstSelectedAt: Date }, policy: ChangePolicy, now: Date = new Date()): boolean {
+  return changeState(selection, policy, now).ok;
 }
 
 /** Whole days from now until `date` (server-side helper so pages don't call Date.now() during render). */

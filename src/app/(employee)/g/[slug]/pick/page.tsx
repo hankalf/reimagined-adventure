@@ -3,7 +3,7 @@ import { dict, fill, formatMoney, localized } from "@/i18n";
 import { getEmployeeSession } from "@/lib/auth";
 import { getLang } from "@/lib/lang";
 import { getPickContext } from "@/lib/selection";
-import { campaignAcceptsPicks, canChangeSelection } from "@/lib/selection-rules";
+import { campaignAcceptsPicks, canChangeSelection, changeDeadline } from "@/lib/selection-rules";
 import { loadCampaign } from "../campaign";
 import { GiftGrid } from "./gift-grid";
 
@@ -19,13 +19,13 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
   const ctx = await getPickContext(campaign.id, session.employeeId);
   const wantsChange = sp.change === "1";
   if (ctx.selection && !session.preview) {
-    const changeable = canChangeSelection(ctx.selection.status, campaign.allowChangeUntilOrdered);
+    const changeable = canChangeSelection(ctx.selection, campaign);
     if (!changeable || (!wantsChange && ctx.selection.status !== "NEEDS_REPICK")) redirect(`/g/${slug}/done`);
   }
 
   const repick = ctx.selection?.status === "NEEDS_REPICK" && !session.preview;
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <main className="safe-x mx-auto max-w-6xl py-5 md:py-8">
       {session.preview && (
         <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-preview-banner>
           {fill(t.landing.previewBanner, { name: `${ctx.employee.firstName} ${ctx.employee.lastName}` })}
@@ -37,7 +37,7 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
           <p className="mt-1 text-sm text-amber-900">{fill(t.done.repickBody, { item: localized(lang, ctx.selection.item.name, ctx.selection.item.nameEs) })}</p>
         </div>
       )}
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:mb-6">
         <div>
           <h1 className="theme-text text-2xl font-bold text-slate-900 md:text-3xl">{fill(t.pick.greeting, { name: ctx.employee.firstName })}</h1>
           <p className="theme-muted mt-1 text-slate-600">{t.pick.chooseOne}</p>
@@ -56,6 +56,10 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
         items={ctx.items}
         currentItemId={ctx.selection?.itemId ?? null}
         allowChange={campaign.allowChangeUntilOrdered}
+        changeWindowHours={campaign.changeWindowHours}
+        changeDeadline={
+          ctx.selection?.status === "SELECTED" && !session.preview ? (changeDeadline(ctx.selection.firstSelectedAt, campaign.changeWindowHours)?.toISOString() ?? null) : null
+        }
       />
     </main>
   );

@@ -59,6 +59,12 @@ export function formatMoney(amount: number | null | undefined, currency = "USD",
   }
 }
 
+/** "Dec 1, 3:45 PM" / "1 dic, 3:45 p.m." in the given time zone (the device's own when omitted). */
+export function formatDateTime(date: Date | string, lang: Lang | string = "en", timeZone?: string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat(lang === "es" ? "es-US" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone }).format(d);
+}
+
 export function formatDate(date: Date | string | null | undefined, lang: Lang = "en"): string {
   if (!date) return "";
   const d = typeof date === "string" ? new Date(date) : date;

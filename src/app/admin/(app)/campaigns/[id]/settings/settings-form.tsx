@@ -13,6 +13,7 @@ type Settings = {
   currency: string;
   requireLastName: boolean;
   allowChangeUntilOrdered: boolean;
+  changeWindowHours: string;
   showSoldOutItems: boolean;
   hideItemsOverBudget: boolean;
   showBudgetToEmployees: boolean;
@@ -100,6 +101,18 @@ export function SettingsForm({ campaign, canDelete, selectionCount }: { campaign
           <h2 className="font-semibold">Rules</h2>
           <Toggle name="requireLastName" label="Ask for last name as well as employee number" hint="Recommended. Prevents someone picking with a colleague's number alone." checked={campaign.requireLastName} />
           <Toggle name="allowChangeUntilOrdered" label="Let employees change their gift until HR marks it ordered" hint="Off: the first confirmed choice is final." checked={campaign.allowChangeUntilOrdered} />
+          <div className="rounded-lg border border-slate-200 p-3 text-sm" data-change-window>
+            <label htmlFor="changeWindowHours" className="font-medium">
+              Hours to change their gift after the first pick
+            </label>
+            <div className="mt-2 flex items-center gap-2">
+              <input id="changeWindowHours" name="changeWindowHours" type="number" min={1} max={2160} step={1} inputMode="numeric" defaultValue={campaign.changeWindowHours} placeholder="No limit" className="input w-28" />
+              <span className="text-slate-600">hours</span>
+            </div>
+            <span className="mt-1 block text-xs text-slate-500">
+              Counted from the employee&apos;s first choice. After that their gift is locked, even if HR hasn&apos;t ordered yet. Leave blank for no time limit (changes allowed until HR orders). If a gift goes out of stock, the employee can always re-pick, and that re-pick starts a fresh window.
+            </span>
+          </div>
           <Toggle name="showSoldOutItems" label="Show sold-out gifts (greyed out) instead of hiding them" hint="Helps employees understand why an item they heard about is unavailable." checked={campaign.showSoldOutItems} />
           <Toggle name="allEmployeesEligible" label="All active employees are eligible" hint="Off: only people uploaded on this campaign's Employees tab can pick." checked={campaign.allEmployeesEligible} />
         </section>

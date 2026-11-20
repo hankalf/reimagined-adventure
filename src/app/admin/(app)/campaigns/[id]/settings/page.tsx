@@ -21,6 +21,7 @@ export default async function CampaignSettingsPage({ params }: PageProps<"/admin
         currency: c.currency,
         requireLastName: c.requireLastName,
         allowChangeUntilOrdered: c.allowChangeUntilOrdered,
+        changeWindowHours: c.changeWindowHours?.toString() ?? "",
         showSoldOutItems: c.showSoldOutItems,
         hideItemsOverBudget: c.hideItemsOverBudget,
         showBudgetToEmployees: c.showBudgetToEmployees,

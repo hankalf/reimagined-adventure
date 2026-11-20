@@ -79,6 +79,8 @@ export async function chooseAction(_prev: ChooseState, formData: FormData): Prom
       case "already_picked":
       case "cannot_change":
         return { error: t.errors.alreadyPicked };
+      case "change_window_closed":
+        return { error: t.errors.changeWindowClosed };
       case "unavailable":
       case "unknown_item":
         return { error: t.errors.itemUnavailable };

@@ -90,6 +90,8 @@ model Campaign {
   requireLastName         Boolean        @default(true)
   allEmployeesEligible    Boolean        @default(true)
   allowChangeUntilOrdered Boolean        @default(true)
+  /// Hours after an employee's first pick during which they may still change it. Null = until HR orders.
+  changeWindowHours       Int?           @default(4)
   showSoldOutItems        Boolean        @default(true)
   hrEmails                String[]       @default([])
 
@@ -279,6 +281,8 @@ model Selection {
   status           SelectionStatus @default(SELECTED)
   language         String          @default("en")
   selectedAt       DateTime        @default(now())
+  /// Start of the change window: the first pick (restarts when HR forces a re-pick). selectedAt moves on every change.
+  firstSelectedAt  DateTime        @default(now())
   orderedAt        DateTime?
   receivedAt       DateTime?
   collectedAt      DateTime?

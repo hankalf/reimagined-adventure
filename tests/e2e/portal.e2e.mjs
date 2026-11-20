@@ -1,12 +1,14 @@
 /**
  * End-to-end walk through the portal against a running server with the seeded demo database.
  *   BASE_URL=http://localhost:3000 node tests/e2e/portal.e2e.mjs
- * Requires: Playwright + Chromium, EMAIL_TRANSPORT=console, CRON_SECRET set on the server.
+ * Requires: Playwright + Chromium, EMAIL_TRANSPORT=console, CRON_SECRET set on the server, and access to the
+ * same database (DATABASE_URL or .env) to fast-forward the 4-hour gift-change window.
  */
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 // Playwright may be installed globally (as in the cloud sandbox) rather than in node_modules.
-const { chromium } = require("playwright");
+const { chromium, devices } = require("playwright");
+const pg = require("pg");
 import sharp from "sharp";
 import jsQR from "jsqr";
 import ExcelJS from "exceljs";
@@ -39,6 +41,18 @@ async function letterPdf(page) {
   const pages = (text.match(/\/Type\s*\/Page(?!s)/g) || []).length;
   const letter = /\/MediaBox\s*\[\s*0\s+0\s+612(\.0+)?\s+792(\.0+)?\s*\]/.test(text);
   return { buffer, pages, letter };
+}
+
+/** Direct SQL, only to fast-forward time (the gift-change window) without waiting hours. */
+async function sql(text, params = []) {
+  const url = process.env.DATABASE_URL ?? fs.readFileSync(".env", "utf8").match(/^DATABASE_URL="?([^"\n]+)"?/m)?.[1];
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    return (await client.query(text, params)).rows;
+  } finally {
+    await client.end();
+  }
 }
 
 async function shot(page, name) {
@@ -390,6 +404,40 @@ try {
   await twoNames.close();
   ok("either last name, both (any order or hyphenated) and the full name are accepted; a wrong surname is not");
 
+  section("Phone layout on iPhone and Android: sign-in in view, 16px fields, pinned choose button, no sideways scroll");
+  for (const device of ["iPhone 13", "Pixel 7"]) {
+    const phoneCtx = await browser.newContext({ ...devices[device], locale: "en-US" });
+    const ph = await phoneCtx.newPage();
+    await ph.goto(`${BASE}/g/${SLUG}`);
+    const viewportMeta = await ph.locator('meta[name="viewport"]').getAttribute("content");
+    assert(/viewport-fit=cover/.test(viewportMeta), `${device}: edge-to-edge viewport (${viewportMeta})`);
+    assert((await ph.locator('meta[name="theme-color"]').getAttribute("content")) === "#1e3a8a", `${device}: browser bar in the brand colour`);
+    assert(/telephone=no/.test((await ph.locator('meta[name="format-detection"]').getAttribute("content")) ?? ""), `${device}: numbers are not turned into phone links`);
+    const vh = ph.viewportSize().height;
+    const signIn = await ph.locator("[data-landing-signin] button[type=submit]").boundingBox();
+    assert(signIn && signIn.y + signIn.height <= vh, `${device}: sign-in button visible without scrolling (bottom ${Math.round(signIn?.y + signIn?.height)} of ${vh})`);
+    const fieldFont = await ph.locator("#employeeNumber").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    assert(fieldFont >= 16, `${device}: fields are ${fieldFont}px, so iOS doesn't zoom in on tap`);
+    assert(await ph.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${device}: no sideways scrolling on the sign-in page`);
+    await ph.fill("#employeeNumber", `E2E${run}2`);
+    await ph.fill("#lastName", "Smith");
+    await ph.locator("[data-landing-signin] button[type=submit]").click();
+    await ph.waitForURL(new RegExp(`/g/${SLUG}/pick`));
+    await ph.waitForSelector("[data-card]");
+    assert(await ph.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${device}: no sideways scrolling on the gift grid`);
+    await ph.locator("li", { hasText: "Company Hoodie" }).locator("[data-card]").click();
+    await ph.waitForSelector("[data-sheet]");
+    const chooseBox = await ph.locator('[data-sheet-actions] button:has-text("Choose this gift")').boundingBox();
+    assert(chooseBox && chooseBox.y + chooseBox.height <= vh && chooseBox.height >= 44, `${device}: "Choose this gift" pinned within reach (bottom ${Math.round(chooseBox?.y + chooseBox?.height)} of ${vh}, ${Math.round(chooseBox?.height)}px tall)`);
+    await ph.locator("[data-sheet] label", { hasText: /^M$/ }).click();
+    await ph.locator('[data-sheet-actions] button:has-text("Choose this gift")').click();
+    const confirmBox = await ph.locator('[data-sheet-actions] button:has-text("Yes, confirm")').boundingBox();
+    assert(confirmBox && confirmBox.y + confirmBox.height <= vh, `${device}: confirm button visible without scrolling`);
+    await shot(ph, `phone-${device.replace(/\s+/g, "").toLowerCase()}-confirm`);
+    await phoneCtx.close(); // not confirmed: Test2 stays without a gift for the kiosk check later
+  }
+  ok("iPhone 13 and Pixel 7: sign-in visible on arrival, 16px fields, pinned choose/confirm buttons, no sideways scrolling, branded browser bar");
+
   section("Employee flow in Spanish: identity check with employee number + last name");
   const emp = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 1, locale: "es-MX" });
   const e = await emp.newPage();
@@ -459,6 +507,9 @@ try {
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   await e.waitForSelector("text=Código de confirmación");
   await e.waitForSelector("text=Size: M");
+  const deadlineText = await e.locator("[data-change-deadline]").innerText();
+  assert(/Puedes cambiar tu elección hasta el .+\. Después será definitiva\./.test(deadlineText), `change deadline shown (${deadlineText})`);
+  assert(!/UTC/.test(await e.locator("[data-change-deadline] [data-local-time]").innerText()), "deadline shown in the phone's local time, not the server's");
   const doneMascots = await e.locator("[data-done-mascots] [data-elf]:visible").evaluateAll((els) => els.map((el) => el.getAttribute("data-mascot")));
   assert(doneMascots.join(",") === "banana,santa", `thank-you page shows both thank-you mascots (${doneMascots.join(",")})`);
   const code = (await e.locator("dd.font-mono").first().textContent()).trim();
@@ -546,6 +597,37 @@ try {
   await e.click('button:has-text("Sí, confirmar")');
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   ok("re-picked hoodie size L");
+
+  section("Gift-change window: 4 hours after the first pick the gift locks; blank = until HR orders");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/settings`);
+  assert((await a.inputValue("#changeWindowHours")) === "4", "campaigns default to a 4-hour change window");
+  // Fast-forward: pretend the first pick was 5 hours ago.
+  const moved = await sql(
+    `UPDATE "Selection" SET "firstSelectedAt" = now() - interval '5 hours' WHERE "campaignId" = $1 AND "employeeId" = (SELECT id FROM "Employee" WHERE "employeeNumber" = $2) RETURNING id`,
+    [campaignId, `E2E${run}1`.toUpperCase()],
+  );
+  assert(moved.length === 1, "employee's pick found");
+  await e.goto(`${BASE}/g/${SLUG}/done`);
+  await e.waitForSelector("[data-change-locked]");
+  assert(/Ya pasó el tiempo para cambiar tu regalo/.test(await e.locator("[data-change-locked]").innerText()), "employee told the change window has passed");
+  assert((await e.locator("text=Cambiar mi regalo").count()) === 0, "no change button after the window");
+  await e.goto(`${BASE}/g/${SLUG}/pick?change=1`);
+  await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
+  ok("after 4 hours the change button is gone and the gift grid sends the employee back to their confirmation");
+  await a.fill("#changeWindowHours", "");
+  await a.click('button:has-text("Save settings")');
+  await a.waitForSelector("text=Settings saved.");
+  await e.goto(`${BASE}/g/${SLUG}/done`);
+  await e.waitForSelector("text=Cambiar mi regalo");
+  assert((await e.locator("[data-change-deadline]").count()) === 0, "no deadline shown without a time limit");
+  await a.fill("#changeWindowHours", "4");
+  await a.click('button:has-text("Save settings")');
+  await a.waitForSelector("text=Settings saved.");
+  await e.goto(`${BASE}/g/${SLUG}/done`);
+  await e.waitForSelector("[data-change-locked]");
+  ok("blank = no time limit (change allowed again); back to 4 hours locks it");
+  // Back to a fresh window so the rest of the walkthrough runs as before.
+  await sql(`UPDATE "Selection" SET "firstSelectedAt" = now() WHERE id = $1`, [moved[0].id]);
 
   section("One-click Amazon cart: link with ASIN + quantity, variant check, mark the cart ordered");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/orders`);

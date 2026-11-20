@@ -13,7 +13,7 @@ import { applyOrderPrice } from "@/lib/pricing";
 import { launchStatus } from "@/lib/launch";
 import { isMascotKind } from "@/lib/mascot";
 import { isBgPattern, isCardStyle, isFontStyle, isHex, isTextMode } from "@/lib/theme";
-import { employeeNumberCandidates } from "@/lib/selection-rules";
+import { MAX_CHANGE_WINDOW_HOURS, employeeNumberCandidates } from "@/lib/selection-rules";
 import { isHexColor, slugify } from "@/lib/utils";
 import { randomBytes } from "node:crypto";
 
@@ -72,6 +72,7 @@ export async function createCampaignAction(_prev: FormState, formData: FormData)
             currency: source.currency,
             requireLastName: source.requireLastName,
             allowChangeUntilOrdered: source.allowChangeUntilOrdered,
+            changeWindowHours: source.changeWindowHours,
             showSoldOutItems: source.showSoldOutItems,
             hideItemsOverBudget: source.hideItemsOverBudget,
             items: { create: source.items.map((ci) => ({ itemId: ci.itemId, sortOrder: ci.sortOrder, stockLimit: ci.stockLimit, unitCostOverride: ci.unitCostOverride })) },
@@ -99,6 +100,11 @@ export async function updateCampaignSettingsAction(_prev: FormState, formData: F
   const opensAt = date(s(formData, "opensAt"));
   const closesAt = date(s(formData, "closesAt"));
   if (opensAt && closesAt && closesAt < opensAt) return { error: "Close date must be after the open date." };
+  const windowRaw = s(formData, "changeWindowHours");
+  const changeWindowHours = windowRaw === "" ? null : Number(windowRaw);
+  if (changeWindowHours !== null && (!Number.isInteger(changeWindowHours) || changeWindowHours < 1 || changeWindowHours > MAX_CHANGE_WINDOW_HOURS)) {
+    return { error: `Hours to change a gift must be a whole number from 1 to ${MAX_CHANGE_WINDOW_HOURS}, or blank for no limit.` };
+  }
 
   await db.campaign.update({
     where: { id },
@@ -110,6 +116,7 @@ export async function updateCampaignSettingsAction(_prev: FormState, formData: F
       currency,
       requireLastName: formData.get("requireLastName") === "on",
       allowChangeUntilOrdered: formData.get("allowChangeUntilOrdered") === "on",
+      changeWindowHours,
       showSoldOutItems: formData.get("showSoldOutItems") === "on",
       hideItemsOverBudget: formData.get("hideItemsOverBudget") === "on",
       showBudgetToEmployees: formData.get("showBudgetToEmployees") === "on",

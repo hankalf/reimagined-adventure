@@ -37,7 +37,9 @@ export function A11yToggle({ labels, dark = false }: { labels: { largerText: str
       // ignore
     }
   }
-  const cls = dark ? "rounded-full border border-slate-600 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800" : "rounded-full border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100";
+  // 36 px minimum so the buttons are easy to tap on a phone.
+  const base = "flex min-h-9 min-w-9 items-center justify-center rounded-full border px-2.5 text-xs";
+  const cls = dark ? `${base} border-slate-600 text-slate-200 hover:bg-slate-800` : `${base} border-slate-300 text-slate-700 hover:bg-slate-100`;
   return (
     <div className="flex items-center gap-1" data-a11y>
       <button type="button" onClick={() => update({ ...prefs, large: !prefs.large })} className={`${cls} ${prefs.large ? "font-bold" : ""}`} aria-pressed={prefs.large} title={prefs.large ? labels.normalText : labels.largerText}>

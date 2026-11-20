@@ -56,6 +56,8 @@ export const en = {
     shortlistEmpty: "Tap the heart on gifts you like to compare them here.",
     viewDetails: "View details",
     selectThis: "Choose this gift",
+    showMore: "Show more",
+    showLess: "Show less",
     chooseOption: "Choose {label}",
     optionRequired: "Please choose a {label}.",
     confirmTitle: "Confirm your choice",

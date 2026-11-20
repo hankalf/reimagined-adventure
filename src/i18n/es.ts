@@ -58,6 +58,8 @@ export const es: Dictionary = {
     shortlistEmpty: "Toca el corazón en los regalos que te gusten para compararlos aquí.",
     viewDetails: "Ver detalles",
     selectThis: "Elegir este regalo",
+    showMore: "Ver más",
+    showLess: "Ver menos",
     chooseOption: "Elige {label}",
     optionRequired: "Por favor elige {label}.",
     confirmTitle: "Confirma tu elección",

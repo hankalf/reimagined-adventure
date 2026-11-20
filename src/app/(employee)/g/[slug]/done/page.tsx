@@ -81,7 +81,7 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
               </div>
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-wide text-slate-500 sm:text-sm">{t.done.youChose}</p>
-                <h2 className="text-lg font-semibold leading-snug text-slate-900 sm:text-xl">{name}</h2>
+                <h2 className="text-lg font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere] sm:text-xl">{name}</h2>
                 {(selection.option1Value || selection.option2Value) && <p className="text-sm text-slate-700 sm:text-base">{optionDetail(selection.item, selection)}</p>}
               </div>
             </div>
@@ -103,7 +103,7 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
             </div>
             <div className="mt-5">
               <h3 className="font-semibold text-slate-900">{t.done.pickupTitle}</h3>
-              <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{pickup}</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-slate-700 [overflow-wrap:anywhere]">{pickup}</p>
             </div>
             <p className="mt-4 text-xs text-slate-500">{t.done.saveThis}</p>
             {canChange &&

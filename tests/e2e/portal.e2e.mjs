@@ -113,7 +113,11 @@ try {
   ok("ASIN extracted from the Amazon link");
   await a.fill("#name", `E2E Mug ${run}`);
   await a.fill("#nameEs", `Taza E2E ${run}`);
-  await a.fill("#description", "A test mug.");
+  // Long unbroken link and many lines: reproduces descriptions that pushed the phone sheet wider than the screen.
+  await a.fill(
+    "#description",
+    `A test mug.\nDetails: https://www.example.com/products/insulated-ceramic-mug-with-extra-long-product-path-1234567890ABCDEFGHIJ\n${Array.from({ length: 12 }, (_, i) => `Feature line ${i + 1}: dishwasher safe, microwave safe, holds 15 ounces.`).join("\n")}`,
+  );
   await a.fill("#unitCost", "20");
   await a.fill("#option1Label", "Color");
   await a.fill("#option1Values", "Red, Blue, Green");
@@ -425,6 +429,27 @@ try {
     await ph.waitForURL(new RegExp(`/g/${SLUG}/pick`));
     await ph.waitForSelector("[data-card]");
     assert(await ph.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${device}: no sideways scrolling on the gift grid`);
+    // A long description (long link + many lines) never makes the sheet wider than the screen, and folds on phones.
+    await ph.locator("li", { hasText: `E2E Mug ${run}` }).locator("[data-card]").click();
+    await ph.waitForSelector("[data-sheet]");
+    const vw = ph.viewportSize().width;
+    const sheetFit = () =>
+      ph.evaluate(() => {
+        const sc = document.querySelector("[data-sheet-scroll]");
+        const sh = document.querySelector("[data-sheet]").getBoundingClientRect();
+        return { sw: sc.scrollWidth, cw: sc.clientWidth, left: Math.round(sh.left), right: Math.round(sh.right) };
+      });
+    let fit = await sheetFit();
+    assert(fit.sw <= fit.cw && fit.left >= 0 && fit.right <= vw, `${device}: long description doesn't push the sheet past the screen edge (content ${fit.sw}px in ${fit.cw}px, sheet ${fit.left}-${fit.right} of ${vw})`);
+    const foldedH = (await ph.locator("[data-description]").boundingBox()).height;
+    await ph.locator("[data-description-toggle]").click();
+    const openH = (await ph.locator("[data-description]").boundingBox()).height;
+    assert(openH > foldedH * 1.5 && (await ph.locator("[data-description-toggle]").innerText()) === "Show less", `${device}: long description is folded and "Show more" opens it (${Math.round(foldedH)} -> ${Math.round(openH)}px)`);
+    fit = await sheetFit();
+    assert(fit.sw <= fit.cw, `${device}: still no sideways sliding with the full description open (${fit.sw}/${fit.cw})`);
+    await shot(ph, `phone-${device.replace(/\s+/g, "").toLowerCase()}-long-description`);
+    await ph.locator('[data-sheet] button[aria-label="Close"]').first().click();
+    await ph.waitForSelector("[data-sheet]", { state: "detached" });
     // The sheet fits the screen and the page behind it stays put.
     const y0 = await ph.evaluate(() => {
       window.scrollTo(0, 150);

@@ -52,10 +52,10 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
             // eslint-disable-next-line @next/next/no-img-element
             <img src={`/api/images/${campaign.heroImageId}`} alt="" className="mb-5 h-40 w-full rounded-2xl object-cover shadow-sm sm:h-56 md:mb-6 md:h-72" />
           )}
-          <h1 className="theme-text text-[1.75rem] leading-tight font-bold tracking-tight text-slate-900 sm:text-3xl md:text-4xl" style={{ color: campaign.primaryColor }}>
+          <h1 className="theme-text text-[1.75rem] leading-tight font-bold tracking-tight text-slate-900 [overflow-wrap:anywhere] sm:text-3xl md:text-4xl" style={{ color: campaign.primaryColor }}>
             {headline}
           </h1>
-          {message && <p className="theme-muted mt-3 whitespace-pre-line text-base text-slate-700 sm:text-lg md:mt-4">{message}</p>}
+          {message && <p className="theme-muted mt-3 whitespace-pre-line text-base text-slate-700 [overflow-wrap:anywhere] sm:text-lg md:mt-4">{message}</p>}
           {deadline && (
             <p
               className="theme-pill mt-4 inline-flex flex-wrap items-center gap-x-2 rounded-2xl bg-accent/15 px-3 py-1.5 text-sm font-medium text-slate-800 sm:rounded-full"
@@ -105,7 +105,7 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
           )}
           {leadership && (
             <blockquote className="mt-6 rounded-2xl border-l-4 bg-white p-5 shadow-sm md:mt-8" style={{ borderColor: campaign.accentColor }}>
-              <p className="whitespace-pre-line text-slate-700 italic">“{leadership}”</p>
+              <p className="whitespace-pre-line text-slate-700 italic [overflow-wrap:anywhere]">“{leadership}”</p>
               {campaign.leadershipName && <footer className="mt-3 text-sm font-medium text-slate-600">— {campaign.leadershipName}</footer>}
             </blockquote>
           )}

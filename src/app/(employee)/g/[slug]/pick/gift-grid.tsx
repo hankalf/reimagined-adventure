@@ -184,7 +184,7 @@ export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange, cha
                     </div>
                   </div>
                   <div className="flex flex-1 flex-col p-2.5 sm:p-3">
-                    <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900 group-hover:text-brand">{name}</h3>
+                    <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere] group-hover:text-brand">{name}</h3>
                     {item.category && <p className="mt-1 text-xs text-slate-500">{item.category}</p>}
                   </div>
                 </button>
@@ -314,9 +314,10 @@ function ItemDialog({
           <input type="hidden" name="slug" value={slug} />
           <input type="hidden" name="itemId" value={item.id} />
           {/* Scrolling part: photos, details and options. */}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <div className="grid sm:grid-cols-2">
-              <div className="flex flex-col bg-slate-100">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain" data-sheet-scroll>
+            {/* minmax(0, 1fr): columns may be narrower than the longest word, so nothing pushes past the screen edge. */}
+            <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="flex min-w-0 flex-col bg-slate-100">
                 <div className="sheet-photo relative sm:aspect-square" {...swipe}>
                   <span aria-hidden className="absolute left-1/2 top-2 z-10 h-1.5 w-10 -translate-x-1/2 rounded-full bg-black/25 sm:hidden" />
                   {src ? (
@@ -383,9 +384,9 @@ function ItemDialog({
                   </div>
                 )}
               </div>
-              <div className="flex flex-col p-5 sm:p-6">
+              <div className="flex min-w-0 flex-col p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 id="item-dialog-title" className="text-xl font-bold leading-snug text-slate-900">
+                  <h2 id="item-dialog-title" className="min-w-0 text-xl font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]">
                     {name}
                   </h2>
                   <button type="button" onClick={onClose} className="hidden rounded-full p-1 text-slate-500 hover:bg-slate-100 sm:block" aria-label={t.pick.close}>
@@ -398,8 +399,8 @@ function ItemDialog({
                   {item.soldOut && <span className="badge bg-slate-800 text-white">{t.pick.soldOut}</span>}
                   {item.overBudget && <span className="badge bg-red-100 text-red-800">{t.pick.overBudget}</span>}
                 </div>
-                {description && <p className="mt-4 whitespace-pre-line text-sm text-slate-700">{description}</p>}
-                {item.type === "CUSTOM" && <p className="mt-3 text-xs text-slate-500">{t.pick.customGiftNote}</p>}
+                {description && <Description text={description} t={t} />}
+                {item.type === "CUSTOM" && <p className="mt-3 text-xs text-slate-500 [overflow-wrap:anywhere]">{t.pick.customGiftNote}</p>}
                 {item.groups.map((g) => (
                   <fieldset key={g.index} className="mt-5">
                     <legend className="label">{fill(t.pick.chooseOption, { label: g.label })}</legend>
@@ -409,7 +410,7 @@ function ItemDialog({
                         return (
                           <label
                             key={v}
-                            className={`flex min-h-10 min-w-12 cursor-pointer items-center justify-center rounded-full border px-4 text-sm font-medium transition ${
+                            className={`flex min-h-10 min-w-12 max-w-full cursor-pointer items-center justify-center rounded-full border px-4 text-center text-sm font-medium transition [overflow-wrap:anywhere] ${
                               selected ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
                             }`}
                           >
@@ -472,6 +473,36 @@ function ItemDialog({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Gift description. On phones a long one is folded to six lines with "Show more", so the sizes and colours stay
+ * close to the top; long links or codes without spaces wrap instead of pushing the sheet wider than the screen.
+ */
+function Description({ text, t }: { text: string; t: Dictionary }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [folded, setFolded] = useState(false);
+  useEffect(() => {
+    // Measured after layout (not synchronously in the effect): is the text taller than the six-line fold?
+    const frame = requestAnimationFrame(() => {
+      const el = ref.current;
+      if (el) setFolded(el.scrollHeight > el.clientHeight + 1);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [text]);
+  return (
+    <div className="mt-4">
+      <p ref={ref} data-description className={`whitespace-pre-line text-sm text-slate-700 [overflow-wrap:anywhere] sm:line-clamp-none ${expanded ? "" : "line-clamp-6"}`}>
+        {text}
+      </p>
+      {(folded || expanded) && (
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="mt-1 min-h-9 text-sm font-semibold text-brand underline-offset-2 hover:underline sm:hidden" aria-expanded={expanded} data-description-toggle>
+          {expanded ? t.pick.showLess : t.pick.showMore}
+        </button>
+      )}
     </div>
   );
 }

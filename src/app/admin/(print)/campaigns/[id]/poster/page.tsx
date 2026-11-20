@@ -1,30 +1,15 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { appUrl } from "@/lib/utils";
 import { PrintButton } from "./print-button";
 import { FitToPage } from "./fit-to-page";
 import { DancingMascot } from "@/components/dancing-mascot";
 import { ItemThumb } from "@/components/item-thumb";
 import { imageSrc } from "@/lib/image-src";
 import { mascotFaceProps } from "@/lib/mascot";
+import { posterLayout, posterTiles } from "@/lib/poster";
 
-/** Max gift tiles on one Letter page; beyond this the last tile becomes "+N more". */
-const MAX_TILES = 24;
 const PX_PER_IN = 96;
-
-/**
- * Sizes (inches / points) for a US Letter poster. Printable area with 0.4 in margins is 7.7 × 10.2 in; the
- * sheet uses 7.7 × 10.1 in to leave a little slack. Bigger catalogs get a smaller QR code and more columns.
- * FitToPage shrinks everything slightly if a tier still runs over.
- */
-function posterLayout(giftCount: number) {
-  if (giftCount === 0) return { qrIn: 4.6, mascotIn: 1.9, cols: 0, headlinePt: 40, namePt: 0, nameEsPt: 0 };
-  if (giftCount <= 4) return { qrIn: 3.2, mascotIn: 1.5, cols: 4, headlinePt: 32, namePt: 10, nameEsPt: 8 };
-  if (giftCount <= 6) return { qrIn: 3.0, mascotIn: 1.4, cols: giftCount, headlinePt: 30, namePt: 9.5, nameEsPt: 7.5 };
-  if (giftCount <= 12) return { qrIn: 2.6, mascotIn: 1.3, cols: 6, headlinePt: 28, namePt: 9, nameEsPt: 7.5 };
-  return { qrIn: 2.3, mascotIn: 1.2, cols: 8, headlinePt: 26, namePt: 8, nameEsPt: 7 };
-}
 
 export default async function PosterPage({ params, searchParams }: PageProps<"/admin/campaigns/[id]/poster">) {
   await requireAdmin();
@@ -33,7 +18,6 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
   const showGifts = sp.gifts !== "0";
   const campaign = await db.campaign.findUnique({ where: { id } });
   if (!campaign) notFound();
-  const url = `${appUrl()}/g/${campaign.slug}`;
   const gifts = showGifts
     ? (await db.campaignItem.findMany({ where: { campaignId: id }, include: { item: true }, orderBy: [{ sortOrder: "asc" }, { item: { name: "asc" } }] })).filter(
         (ci) => ci.item.active && ci.status === "AVAILABLE",
@@ -44,9 +28,8 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
   // Two mascots flank the QR code; shrink them so the row stays within the 7.7 in printable width.
   const mascotIn = posterMascots.length > 1 ? Math.min(L.mascotIn, (7.7 - L.qrIn - 0.6) / 2) : L.mascotIn;
   const mascotEl = (m: (typeof posterMascots)[number]) => <DancingMascot key={m.id} {...mascotFaceProps(m)} still snow={false} size={Math.round(mascotIn * PX_PER_IN)} />;
-  const overflow = gifts.length > MAX_TILES;
-  const shown = overflow ? gifts.slice(0, MAX_TILES - 1) : gifts;
-  const moreCount = gifts.length - shown.length;
+  // At most 3 rows of 8; with more gifts than that, the last tile says "and more!".
+  const { shown, more } = posterTiles(gifts);
   const gapIn = L.cols >= 8 ? 0.12 : 0.15;
   const tileWidth = L.cols > 0 ? `calc((100% - ${(L.cols - 1) * gapIn}in) / ${L.cols})` : "0";
   const steps = [
@@ -57,14 +40,15 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
 
   return (
     <div className="py-6 print:py-0">
-      {/* US Letter, portrait. Applies only while this page is printed. */}
-      <style>{`@page { size: letter portrait; margin: 0.4in; }`}</style>
+      {/* US Letter, portrait, no page margin: browsers then print no page address, date or page number.
+          The 0.4 in margin is padding on the sheet instead. Applies only while this page is printed. */}
+      <style>{`@page { size: letter portrait; margin: 0; }`}</style>
 
       <div className="no-print mx-auto mb-4 flex w-[8.5in] max-w-full flex-wrap items-center justify-between gap-2 px-2 text-sm">
         <a href={`/admin/campaigns/${id}`} className="text-blue-700 hover:underline">
           ← Back to campaign
         </a>
-        <span className="text-xs text-slate-600">US Letter · 8.5 × 11 in · print at 100% scale with default margins</span>
+        <span className="text-xs text-slate-600">US Letter · 8.5 × 11 in · print at 100% scale</span>
         <div className="flex items-center gap-3">
           <a href={`/admin/campaigns/${id}/poster${showGifts ? "?gifts=0" : ""}`} className="text-blue-700 hover:underline" data-poster-gifts-toggle>
             {showGifts ? "Hide gifts" : "Show gifts"}
@@ -75,7 +59,7 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
 
       <div
         data-poster-sheet
-        className="print-exact mx-auto h-[11in] w-[8.5in] overflow-hidden bg-white px-[0.4in] pb-[0.5in] pt-[0.4in] shadow-xl print:h-[10.1in] print:w-[7.7in] print:p-0 print:shadow-none"
+        className="print-exact mx-auto h-[11in] w-[8.5in] overflow-hidden bg-white px-[0.4in] pb-[0.5in] pt-[0.4in] shadow-xl print:h-[10.9in] print:pb-[0.4in] print:shadow-none"
       >
         <FitToPage>
           <header className="w-full">
@@ -133,12 +117,15 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
                     )}
                   </li>
                 ))}
-                {moreCount > 0 && (
+                {more && (
                   <li style={{ width: tileWidth }} data-poster-more>
-                    <div className="flex aspect-square w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 font-bold text-slate-700" style={{ fontSize: `${L.namePt + 3}pt` }}>
-                      +{moreCount}
-                      <span className="font-semibold text-slate-500" style={{ fontSize: `${L.nameEsPt}pt` }}>
-                        more · y más
+                    <div
+                      className="flex aspect-square w-full flex-col items-center justify-center rounded-lg border-2 border-dashed bg-slate-50 font-black leading-tight"
+                      style={{ fontSize: `${L.namePt + 4}pt`, color: campaign.primaryColor, borderColor: campaign.accentColor }}
+                    >
+                      and more!
+                      <span className="font-semibold text-slate-500" style={{ fontSize: `${L.nameEsPt + 1}pt` }}>
+                        ¡y más!
                       </span>
                     </div>
                   </li>
@@ -155,19 +142,18 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
                 </li>
               ))}
             </ol>
-            {campaign.closesAt && (
-              <p className="mt-[0.06in] font-semibold">
-                Choose by {campaign.closesAt.toLocaleDateString("en-US", { dateStyle: "long" })} · Elige antes del {campaign.closesAt.toLocaleDateString("es-US", { dateStyle: "long" })}
-              </p>
-            )}
           </section>
 
-          <footer className="w-full text-slate-500">
-            <p style={{ fontSize: "9pt" }}>Or type this link / O escribe este enlace:</p>
-            <p className="break-all font-mono font-semibold text-slate-800" style={{ fontSize: "12pt" }}>
-              {url}
-            </p>
-          </footer>
+          {campaign.closesAt && (
+            <footer className="w-full leading-tight" data-poster-deadline>
+              <p className="font-black" style={{ color: campaign.primaryColor, fontSize: "17pt" }}>
+                Choose your gift by {campaign.closesAt.toLocaleDateString("en-US", { dateStyle: "long" })}
+              </p>
+              <p className="font-semibold text-slate-600" style={{ fontSize: "12pt" }}>
+                Elige tu regalo antes del {campaign.closesAt.toLocaleDateString("es-US", { dateStyle: "long" })}
+              </p>
+            </footer>
+          )}
         </FitToPage>
       </div>
     </div>

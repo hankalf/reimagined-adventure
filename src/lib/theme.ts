@@ -78,6 +78,22 @@ export function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** QR codes need dark modules on white to scan reliably. Darken the brand colour until it has about 4.5:1 contrast with white. */
+export const QR_MAX_LUMINANCE = 0.18;
+export function qrInk(hex: string | null | undefined): string {
+  if (!isHex(hex)) return "#000000";
+  let [r, g, b] = hexToRgb(hex);
+  const toHex = (n: number) => Math.round(n).toString(16).padStart(2, "0");
+  let out = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  while (luminance(out) > QR_MAX_LUMINANCE) {
+    r *= 0.9;
+    g *= 0.9;
+    b *= 0.9;
+    out = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+  return out.toLowerCase();
+}
+
 /** Whether text placed directly on the background should be dark or light. */
 export function resolvedTextMode(t: Pick<PageTheme, "textMode" | "bgPattern" | "bgColor" | "bgColor2" | "bgImageUrl" | "bgOverlay">): "dark" | "light" {
   if (t.textMode === "dark" || t.textMode === "light") return t.textMode;

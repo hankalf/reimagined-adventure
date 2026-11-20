@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 // Playwright may be installed globally (as in the cloud sandbox) rather than in node_modules.
 const { chromium } = require("playwright");
 import sharp from "sharp";
+import jsQR from "jsqr";
 import ExcelJS from "exceljs";
 import fs from "node:fs";
 import path from "node:path";
@@ -244,6 +245,10 @@ try {
   await card2.locator('input[name$=":showOnLanding"]').uncheck();
   await card2.locator('input[name$=":showOnDone"]').check();
   assert(await a.locator('input[name="mascotEnabled"]').isChecked(), "adding a mascot turns mascots on");
+  // A company logo (shown on employee pages and in the middle of the QR code).
+  const logoPath = path.join(SHOTS, "logo.png");
+  await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><rect width="240" height="240" rx="36" fill="#15803d"/><circle cx="120" cy="120" r="70" fill="#fde68a"/></svg>')).png().toFile(logoPath);
+  await a.setInputFiles("#logo", logoPath);
   await a.click('button:has-text("Save branding")');
   await a.waitForSelector("text=Branding saved.");
   await a.reload();
@@ -317,13 +322,31 @@ try {
   await a.goto(`${BASE}/admin/campaigns/${campaignId}`);
   await a.click('button:has-text("Open campaign")');
   await a.waitForSelector("text=Close campaign");
-  const qr = await a.request.get(`${BASE}/api/campaigns/${SLUG}/qr?size=256`);
+  const qr = await a.request.get(`${BASE}/api/campaigns/${SLUG}/qr?size=512`);
   assert(qr.ok() && qr.headers()["content-type"] === "image/png", "QR PNG served");
+  const qrRaw = await sharp(await qr.body()).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const qrText = jsQR(new Uint8ClampedArray(qrRaw.data), qrRaw.info.width, qrRaw.info.height)?.data ?? "";
+  assert(qrText.endsWith(`/g/${SLUG}`), `branded QR (brand colour + logo) still scans to the campaign link (${qrText})`);
   const qrSvg = await a.request.get(`${BASE}/api/campaigns/${SLUG}/qr?format=svg`);
-  assert(qrSvg.ok() && (await qrSvg.text()).includes("<svg"), "QR SVG served");
-  ok("campaign is open; QR PNG and SVG endpoints work");
+  const qrSvgText = await qrSvg.text();
+  // The winter quick theme set the primary colour to #1e3a8a.
+  assert(qrSvg.ok() && qrSvgText.includes("<svg") && qrSvgText.includes("#1e3a8a") && /<image [^>]*href="data:image\/png;base64,/.test(qrSvgText), "QR SVG is in the brand colour with the logo in the middle");
+  ok("campaign is open; QR PNG and SVG are branded (colour + logo) and scan to the campaign link");
+  // A deadline, shown at the bottom of the poster.
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/settings`);
+  const deadline = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  await a.fill("#closesAt", deadline);
+  await a.click('button:has-text("Save settings")');
+  await a.waitForSelector("text=Settings saved.");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/poster`);
   await a.waitForSelector("text=Escanea para elegir tu regalo");
+  const sheetText = await a.locator("[data-poster-sheet]").innerText();
+  assert(!/https?:|\/g\//.test(sheetText), "poster prints no links");
+  assert((await a.locator("[data-poster-sheet] [data-poster-deadline]").count()) === 1 && /Choose your gift by/.test(await a.locator("[data-poster-deadline]").innerText()), "deadline shown on the poster");
+  const deadlineIsLast = await a.locator("[data-poster-deadline]").evaluate((el) => el.nextElementSibling === null && !el.closest("section"));
+  assert(deadlineIsLast, "deadline sits at the bottom of the poster, outside the steps box");
+  const pageRule = await a.evaluate(() => [...document.querySelectorAll("style")].map((s) => s.textContent).join(" "));
+  assert(/@page\s*\{[^}]*margin:\s*0[;\s}]/.test(pageRule), "zero page margin, so browsers print no page address, date or page number");
   assert((await a.locator("[data-elf][data-mascot='banana']").count()) === 1 && (await a.locator("[data-elf]").count()) === 1, "poster shows only the mascot placed on the poster (banana)");
   assert((await a.locator("[data-poster-gift]").count()) === 4, "poster lists the 4 gifts shown in the campaign");
   const posterMugImg = await a.locator("[data-poster-gift]", { hasText: `E2E Mug ${run}` }).locator("img").getAttribute("src");
@@ -338,7 +361,8 @@ try {
   assert((await a.locator("[data-poster-gifts]").count()) === 0, "gifts section can be hidden for a QR-only poster");
   const qrOnlyPdf = await letterPdf(a);
   assert(qrOnlyPdf.pages === 1 && qrOnlyPdf.letter, `QR-only poster prints on one Letter page (pages=${qrOnlyPdf.pages})`);
-  ok("poster shows gift thumbnails (bilingual names), can hide them, and prints on one US Letter page either way");
+  assert((await a.locator("[data-poster-deadline]").count()) === 1 && !/https?:/.test(await a.locator("[data-poster-sheet]").innerText()), "QR-only poster keeps the deadline and has no links");
+  ok("poster shows gift thumbnails (bilingual names), no links, the deadline at the bottom, can hide gifts, and prints on one US Letter page either way");
 
   section("Two last names: either surname, both, or the full name signs in");
   const twoNames = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 1, locale: "en-US" });

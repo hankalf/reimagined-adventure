@@ -27,7 +27,7 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - Orders spreadsheet (Settings): one live link for all campaigns that Excel ("Get Data → From Web") or Google Sheets (`IMPORTDATA`) refreshes automatically, plus a push webhook that POSTs every order change (chosen, changed, ordered, received, collected, reset, re-priced) to Power Automate, Zapier, Make or your own endpoint so a sheet fills itself. Per-campaign Excel downloads and live links on the campaign's "Excel & live sheet" tab.
 - One-click Amazon cart: the Orders tab opens Amazon with every gift still to order already in the cart at the right quantities (ASIN from the gift, or read from its Amazon link; one cart per marketplace, split into parts of 20 items). Colours/sizes are listed so HR can check the variant in the cart, gifts not on Amazon are listed separately, and "I checked out" marks exactly the picks that were in the cart as ordered.
 - Order-time pricing: type the price actually paid on the Orders row before marking it ordered; the gift is re-priced everywhere and every change is kept in the gift's price history.
-- QR poster: printable bilingual A4 page; PNG/SVG download.
+- QR poster: printable bilingual US Letter page with the gift thumbnails (one row of bigger tiles for up to 6 gifts, otherwise rows of 8, at most 3 rows, the last tile reading "and more!"), the "choose by" date at the bottom and no printed links. The QR code (poster, campaign page, PNG/SVG downloads) is drawn in the campaign's brand colour (darkened automatically if too light to scan) with the logo in the middle.
 - Branding per campaign: logo, hero image, primary/accent colours, bilingual headline, welcome, pickup instructions and leadership message.
 - Admin users: ADMIN and HR roles. Add a user with name, username and role; a temporary password is generated and shown once, and they must choose their own password at first sign-in. Reset password, deactivate, delete. Optional email for reset links.
 - Launch checklist on each campaign (blocking items must pass before "Open campaign"), and "Preview as employee" to walk through the employee pages for any eligible person without saving anything.
@@ -88,6 +88,8 @@ src/lib/excel.ts                  exceljs workbook
 src/lib/webhook.ts                orders webhook (push) + global live feed token
 src/lib/pricing.ts                order-time price updates and price history
 src/lib/amazon-cart.ts            one-click Amazon cart links from the to-order list
+src/lib/poster.ts                 poster layout tiers (3 rows of 8 + "and more!")
+src/lib/qr.ts                     branded QR codes (brand colour + logo, error correction H)
 src/i18n/                         en/es dictionaries for the employee UI
 prisma/schema.prisma              data model; prisma/seed.ts demo data
 ```

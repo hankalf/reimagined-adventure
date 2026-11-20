@@ -23,7 +23,7 @@ export async function needsAttention(): Promise<AttentionItem[]> {
         const eligible = await eligibleEmployees(c);
         const picked = await db.selection.count({ where: { campaignId: c.id, status: { in: ["SELECTED", "ORDERED", "RECEIVED", "COLLECTED"] } } });
         const notPicked = eligible.length - picked;
-        if (notPicked > 0) out.push({ level: "info", text: `${c.name}: ${notPicked} of ${eligible.length} employees haven't picked after ${Math.floor(openedFor)} days. Export the list to send reminders.`, href: `${base}/employees?filter=notpicked` });
+        if (notPicked > 0) out.push({ level: "info", text: `${c.name}: ${notPicked} of ${eligible.length} employees haven't picked after ${Math.floor(openedFor)} days. Print the list by department for supervisors.`, href: `${base}/not-picked` });
       }
       const closes = closesAtInstant(c);
       if (closes) {

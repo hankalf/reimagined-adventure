@@ -78,10 +78,13 @@ export default async function CampaignEmployeesPage({ params, searchParams }: Pa
           <PickOnBehalfForm campaignId={id} employees={pickEmployees} items={pickItems} />
           <h2 className="mt-6 font-semibold">Exports</h2>
           <div className="mt-2 flex flex-wrap gap-2">
+            <a href={`/admin/campaigns/${id}/not-picked`} target="_blank" className="btn-primary btn-sm" data-print-not-picked>
+              🖨️ Print not-picked list by department
+            </a>
             <a href={`/api/export/${id}?type=notpicked`} className="btn-secondary btn-sm">
               ⬇ Not picked yet (CSV)
             </a>
-            <a href={`/api/export/${id}?type=notpicked-xlsx`} className="btn-primary btn-sm">
+            <a href={`/api/export/${id}?type=notpicked-xlsx`} className="btn-secondary btn-sm">
               ⬇ Reminders by department (Excel, one sheet per department)
             </a>
             <a href={`/api/export/${id}?type=detail`} className="btn-secondary btn-sm">

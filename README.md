@@ -36,6 +36,7 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - Catalog bulk actions (activate, deactivate, set category, add to campaign), duplicate a gift, duplicate a campaign.
 - Dashboard "Needs attention" panel: re-picks outstanding, gifts without a photo or price, campaigns open for a week with people who haven't picked, campaigns about to close, webhook failures.
 - Reminders by department: Excel workbook with one sheet per department of people who haven't picked.
+- Printable "not picked yet" list by department (Employees tab or campaign page → Print not-picked list): US Letter, one page per department for supervisors (or one combined list, or a single department), names as "Last, First" with tick boxes, people who must re-pick flagged, the deadline in ET and the campaign QR code.
 - Receiving mode: paste ASINs, SKUs, employee numbers or confirmation codes from packing slips to mark ordered picks received in bulk.
 - Audit log viewer (Settings → Audit log) with search and filters.
 - Optional "your gift is ready" email to employees when a pick is marked received (needs an email column in the employee list and SMTP configured).

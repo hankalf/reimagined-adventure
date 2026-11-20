@@ -720,6 +720,26 @@ try {
   await e.waitForSelector("text=Entregado");
   ok("employee sees Collected status in Spanish");
 
+  section("Printable not-picked list by department");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/employees`);
+  assert((await a.locator("[data-print-not-picked]").count()) === 1, "print link on the Employees tab");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/not-picked`);
+  const npDepts = await a.locator("[data-not-picked-dept]").evaluateAll((els) => els.map((el) => el.getAttribute("data-not-picked-dept")));
+  assert(npDepts.join("|") === "Eng|Finance|No department", `departments A–Z with "No department" last (${npDepts.join("|")})`);
+  assert((await a.locator("[data-not-picked-dept='Finance'] [data-not-picked-row]", { hasText: "Smith, Test2" }).count()) === 1, "Test2 listed under Finance as Last, First");
+  assert((await a.locator("[data-not-picked-row]", { hasText: `E2E${run}1`.toUpperCase() }).count()) === 0, "employee who already picked is not listed");
+  assert(/Choose by .+ \(11:59 PM ET\)/.test(await a.locator("[data-not-picked-sheet]").innerText()), "deadline shown in Eastern Time");
+  const npPdf = await letterPdf(a);
+  assert(npPdf.letter && npPdf.pages === 3, `one US Letter page per department (pages=${npPdf.pages})`);
+  fs.writeFileSync(path.join(SHOTS, "not-picked-by-department.pdf"), npPdf.buffer);
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/not-picked?pages=0`);
+  const npOnePdf = await letterPdf(a);
+  assert(npOnePdf.letter && npOnePdf.pages === 1, `single list fits one page (pages=${npOnePdf.pages})`);
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/not-picked?dept=Finance`);
+  assert((await a.locator("[data-not-picked-row]").count()) === 1, "one department can be printed on its own");
+  await shot(a, "not-picked");
+  ok("not-picked list: grouped by department, Last, First, tick boxes, page per department or one list, single-department print");
+
   section("Budget tab totals");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/budget`);
   await a.waitForSelector(`text=$${paidPrice}`);

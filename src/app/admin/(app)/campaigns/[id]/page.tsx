@@ -104,6 +104,9 @@ export default async function CampaignOverviewPage({ params, searchParams }: Pag
             <Link href={`${base}/not-picked`} target="_blank" className="btn-secondary btn-sm">
               Print not-picked list
             </Link>
+            <Link href={`${base}/orders#gift-labels`} className="btn-secondary btn-sm">
+              Gift labels (Word)
+            </Link>
             <a href={`/api/campaigns/${campaign.slug}/qr?size=1024&download=1`} className="btn-secondary btn-sm">
               PNG
             </a>

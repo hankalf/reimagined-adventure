@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 // Playwright may be installed globally (as in the cloud sandbox) rather than in node_modules.
 const { chromium, devices } = require("playwright");
 const pg = require("pg");
+const JSZip = require("jszip");
 import sharp from "sharp";
 import jsQR from "jsqr";
 import ExcelJS from "exceljs";
@@ -800,6 +801,23 @@ try {
   assert((await a.locator("[data-live-recent]").innerText()).includes("Test1 G."), "latest picks show Test1");
   await shot(a, "live");
   ok("Live tab: % picked, still to pick, departments lowest first, picks per hour (ET), top gifts, latest picks");
+
+  section("Gift labels for Word (Avery 5960): To / From / gift with colour and size");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/orders`);
+  assert((await a.locator("[data-gift-labels] form").count()) === 1, "labels form on the Orders tab");
+  assert((await a.inputValue("#labels-from")).length > 0, "From is pre-filled");
+  const labelsRes = await a.request.get(`${BASE}/api/export/${campaignId}/labels?from=${encodeURIComponent("Happy Holidays from the E2E Team")}&status=all&sort=name&start=2`);
+  assert(labelsRes.ok() && labelsRes.headers()["content-type"].includes("wordprocessingml"), "labels download as a Word document");
+  const labelsXml = await (await JSZip.loadAsync(await labelsRes.body())).file("word/document.xml").async("string");
+  assert(labelsXml.includes("Test1 García López") && labelsXml.includes("Happy Holidays from the E2E Team"), "label has To (employee) and the chosen From");
+  assert(/Company Hoodie – [^<]*L</.test(labelsXml), "label shows the gift with its chosen option");
+  assert(labelsXml.includes('<w:gridCol w:w="3780"/><w:gridCol w:w="180"/>') && /<w:trHeight w:val="1440" w:hRule="exact"\/>/.test(labelsXml), "Avery 5960 grid (2⅝ × 1 in labels, ⅛ in gaps)");
+  assert(labelsRes.headers()["x-label-count"] === "1", `one label for the one pick (${labelsRes.headers()["x-label-count"]})`);
+  const openLabels = await a.request.get(`${BASE}/api/export/${campaignId}/labels`);
+  assert(openLabels.headers()["x-label-count"] === "0", "collected gifts are left out by default");
+  const anonLabels = await (await browser.newContext()).request.get(`${BASE}/api/export/${campaignId}/labels`);
+  assert(anonLabels.status() === 401, "labels are admin-only");
+  ok("Word labels: Avery 5960 grid, To/From/gift with option, status filter, admin-only");
 
   section("Budget tab totals");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/budget`);

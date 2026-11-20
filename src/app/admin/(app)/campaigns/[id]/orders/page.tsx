@@ -121,6 +121,58 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
         )}
       </section>
 
+      <section className="card p-5" id="gift-labels" data-gift-labels>
+        <h2 className="font-semibold">🏷️ Gift labels for Word (Avery 5960)</h2>
+        <p className="max-w-3xl text-xs text-slate-500">
+          One label per gift: <strong>To</strong> the employee, <strong>From</strong> whoever you choose, and the gift with its colour and size (long names are shortened). In the campaign&apos;s
+          colours with the logo in the corner. Print on Avery 5960 or 5160 sheets (30 per page) at 100% / &quot;Actual size&quot;.
+        </p>
+        <form method="get" action={`/api/export/${id}/labels`} target="_blank" className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.3fr_1.2fr_0.8fr_auto] lg:items-end">
+          <div>
+            <label htmlFor="labels-from" className="label">
+              From
+            </label>
+            <input id="labels-from" name="from" list="labels-from-options" maxLength={60} defaultValue={campaign.leadershipName || campaign.companyName || "HR"} className="input" />
+            <datalist id="labels-from-options">
+              {[campaign.leadershipName, campaign.companyName, "HR", "Your HR Team", "The Management Team", "Happy Holidays from the Team"]
+                .filter((v, i, all): v is string => Boolean(v) && all.indexOf(v) === i)
+                .map((v) => (
+                  <option key={v} value={v} />
+                ))}
+            </datalist>
+          </div>
+          <div>
+            <label htmlFor="labels-status" className="label">
+              Which gifts
+            </label>
+            <select id="labels-status" name="status" defaultValue="open" className="input">
+              <option value="open">Not yet collected</option>
+              <option value="received">Ready for pickup (received)</option>
+              <option value="ordered">Ordered or received</option>
+              <option value="all">All picks, including collected</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="labels-sort" className="label">
+              Order
+            </label>
+            <select id="labels-sort" name="sort" defaultValue="dept" className="input">
+              <option value="dept">Department, then name</option>
+              <option value="name">Last name</option>
+              <option value="gift">Gift</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="labels-start" className="label">
+              Start at label #
+            </label>
+            <input id="labels-start" name="start" type="number" min={1} max={30} defaultValue={1} className="input" />
+          </div>
+          <button className="btn-primary whitespace-nowrap">⬇ Download for Word</button>
+        </form>
+        <p className="mt-2 text-xs text-slate-500">Using a sheet that already has some labels peeled off? Set &quot;Start at label #&quot; to the first free one (counting across, then down).</p>
+      </section>
+
       <section className="card overflow-x-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 p-4">
           <div>

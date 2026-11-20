@@ -10,13 +10,33 @@ export function ImportForm({ campaignId, campaignAllEligible }: { campaignId?: s
       {campaignId && <input type="hidden" name="campaignId" value={campaignId} />}
       <div>
         <label htmlFor="file" className="label">
-          CSV file
+          CSV or Excel file
         </label>
-        <input id="file" name="file" type="file" accept=".csv,text/csv,text/plain" className="input" required />
+        <input
+          id="file"
+          name="file"
+          type="file"
+          accept=".csv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          className="input"
+          required
+        />
         <p className="mt-1 text-xs text-slate-500">
-          Columns: <code>employee_number, first_name, last_name, department, email{campaignId ? ", budget" : ""}</code>. A single <code>name</code> column also works. Headers are matched loosely.
+          Minimum: an <strong>Employee #</strong> column and a <strong>Name</strong> column written <em>Last, First</em> (two last names are fine: <em>García López, María</em>). Optional:{" "}
+          <code>first_name, last_name, second_last_name, department, email{campaignId ? ", budget" : ""}</code>. Headers are matched loosely; a sheet with no header row (employee # in column A, name in
+          column B) also works.
           {campaignId && " The optional budget column sets a per-employee gift budget for this campaign."}
         </p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs" data-employee-templates>
+          <a href="/api/employees/template?layout=simple" className="btn-secondary btn-sm">
+            ⬇ Simple template (Employee # + Name)
+          </a>
+          <a href="/api/employees/template" className="btn-secondary btn-sm">
+            ⬇ Full Excel template
+          </a>
+          <a href="/api/employees/template?format=csv" className="btn-ghost btn-sm">
+            Full CSV template
+          </a>
+        </div>
       </div>
       {!campaignId && (
         <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -31,7 +51,7 @@ export function ImportForm({ campaignId, campaignAllEligible }: { campaignId?: s
         </label>
       )}
       <button type="submit" disabled={pending} className="btn-primary">
-        {pending ? "Importing…" : "Import CSV"}
+        {pending ? "Importing…" : "Import employees"}
       </button>
       {state?.error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</div>}
       {state?.summary && (

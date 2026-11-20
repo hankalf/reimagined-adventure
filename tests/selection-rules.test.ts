@@ -31,6 +31,35 @@ describe("lastNameMatches", () => {
     expect(lastNameMatches("smith", "García")).toBe(false);
     expect(lastNameMatches("", "García")).toBe(false);
     expect(lastNameMatches("de", "de la Cruz")).toBe(false);
+    expect(lastNameMatches("de la", "de la Cruz")).toBe(false);
+    expect(lastNameMatches("Garcia", "Hernández López")).toBe(false);
+    expect(lastNameMatches("Hernandez Garcia", "Hernández López")).toBe(false);
+  });
+  it("accepts either surname, both, any order, hyphenated", () => {
+    for (const typed of ["Hernandez", "lopez", "Hernández López", "LOPEZ HERNANDEZ", "Hernandez-Lopez", "hernández y lópez"]) {
+      expect(lastNameMatches(typed, "Hernández López"), typed).toBe(true);
+    }
+  });
+  it("accepts both surnames when the list only has one", () => {
+    expect(lastNameMatches("García López", "García")).toBe(true);
+    expect(lastNameMatches("Garcia-Lopez", "García")).toBe(true);
+    expect(lastNameMatches("Lopez Torres", "García")).toBe(false);
+  });
+  it("accepts the full name when the first name is known", () => {
+    expect(lastNameMatches("Luis Hernández López", "Hernández López", "Luis")).toBe(true);
+    expect(lastNameMatches("Luis Hernandez", "Hernández López", "Luis")).toBe(true);
+    expect(lastNameMatches("María José García", "García", "María José")).toBe(true);
+    expect(lastNameMatches("Luis Garcia", "Hernández López", "Luis")).toBe(false);
+    expect(lastNameMatches("Luis", "Hernández López", "Luis")).toBe(false);
+  });
+  it("handles a surname that is also a first-name word", () => {
+    expect(lastNameMatches("Thomas", "Thomas", "Thomas")).toBe(true);
+    expect(lastNameMatches("Martin Martin", "Martin", "Martin")).toBe(true);
+  });
+  it("handles two-letter surnames", () => {
+    expect(lastNameMatches("Li", "Li")).toBe(true);
+    expect(lastNameMatches("Li", "Li Wang")).toBe(true);
+    expect(lastNameMatches("Ng", "Li Wang")).toBe(false);
   });
 });
 

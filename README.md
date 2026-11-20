@@ -90,17 +90,14 @@ src/i18n/                         en/es dictionaries for the employee UI
 prisma/schema.prisma              data model; prisma/seed.ts demo data
 ```
 
-## Employee CSV format
+## Employee list upload (Excel or CSV)
 
-Headers are matched loosely (`Emp No`, `Employee ID`, `Last Name`, `Dept` all work). A single `name` column is split into first/last. Example:
+Upload on Admin → Employees (master list) or on a campaign's Employees tab (marks those people eligible for that campaign and sets optional per-person budgets). Download a template from either page:
 
-```csv
-employee_number,first_name,last_name,department,budget
-10001,Maria,García,Operations,
-10004,Wei,Chen,Engineering,150
-```
+- **Simple template**: just `Employee #` and `Name (Last, First)`, e.g. `10001, García López, María`. A sheet with no header row (employee # in column A, name in column B) also works.
+- **Full template**: `employee_number, first_name, last_name, second_last_name, department, email, budget`. Spanish/payroll headers such as *Apellido paterno* / *Apellido materno* are recognised and combined.
 
-Uploading on a campaign's Employees tab marks those people eligible for that campaign (and sets per-person budgets); uploading on the global Employees page updates the master list.
+Employee numbers are kept as text, so leading zeros survive. Employees sign in with their employee number plus either last name, both last names (any order, hyphenated or not), or their full name; accents and capitals don't matter.
 
 ## Gift catalog import (Excel/CSV)
 

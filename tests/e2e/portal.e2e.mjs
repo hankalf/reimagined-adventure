@@ -171,11 +171,37 @@ try {
   fs.writeFileSync(csvPath, csv);
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/employees`);
   await a.setInputFiles("#file", csvPath);
-  await a.click('button:has-text("Import CSV")');
+  await a.click('button:has-text("Import employees")');
   await a.waitForSelector("text=/Imported: 3 new/");
   ok("3 employees imported and marked eligible");
   await a.reload();
   assert((await a.locator("text=Only the list uploaded for this campaign").count()) === 1, "eligibility switched to the uploaded list");
+
+  section("Employee templates: simple Excel (Employee # + Name 'Last, First') upload");
+  const fullTpl = await a.request.get(`${BASE}/api/employees/template`);
+  assert(fullTpl.ok() && (fullTpl.headers()["content-type"] ?? "").includes("spreadsheetml"), "full Excel template downloads");
+  const fullWb = new ExcelJS.Workbook();
+  await fullWb.xlsx.load(await fullTpl.body());
+  const fullHeaders = fullWb.getWorksheet("Employees").getRow(1).values.slice(1).map(String);
+  assert(fullHeaders.includes("second_last_name") && fullWb.getWorksheet("Instructions"), `full template has a second_last_name column and instructions (${fullHeaders.join(", ")})`);
+  const csvTpl = await a.request.get(`${BASE}/api/employees/template?format=csv`);
+  assert(csvTpl.ok() && (await csvTpl.text()).startsWith("employee_number,"), "full CSV template downloads");
+  const simpleTpl = await a.request.get(`${BASE}/api/employees/template?layout=simple`);
+  const simpleWb = new ExcelJS.Workbook();
+  await simpleWb.xlsx.load(await simpleTpl.body());
+  const simpleSheet = simpleWb.getWorksheet("Employees");
+  assert(simpleSheet.getRow(1).values.slice(1).join("|") === "Employee #|Name (Last, First)", "simple template has Employee # and Name (Last, First)");
+  // Leave the grey example rows in place (as a hurried HR person might) and add one real employee below them.
+  simpleSheet.addRow([`E2E${run}4`, "Martínez Sánchez, Rosa"]);
+  const simplePath = path.join(SHOTS, "employees-simple.xlsx");
+  fs.writeFileSync(simplePath, Buffer.from(await simpleWb.xlsx.writeBuffer()));
+  await a.setInputFiles("#file", simplePath);
+  await a.click('button:has-text("Import employees")');
+  await a.waitForSelector("text=/Imported: 1 new, 0 updated, 3 skipped/");
+  assert((await a.locator("text=/Skipped 3 example row/").count()) === 1, "template example rows were ignored");
+  await a.reload();
+  assert((await a.locator("tr", { hasText: `E2E${run}4` }).filter({ hasText: "Rosa Martínez Sánchez" }).count()) === 1, "simple-sheet employee imported with first name Rosa and last name Martínez Sánchez");
+  ok("templates download; an Excel sheet with only Employee # and 'Last, First' imports correctly and its example rows are ignored");
 
   section("Branding: enable the dancing elf with an uploaded face");
   const face = await sharp({ create: { width: 400, height: 400, channels: 3, background: { r: 250, g: 210, b: 170 } } }).png().toBuffer();
@@ -253,6 +279,32 @@ try {
   const qrOnlyPdf = await letterPdf(a);
   assert(qrOnlyPdf.pages === 1 && qrOnlyPdf.letter, `QR-only poster prints on one Letter page (pages=${qrOnlyPdf.pages})`);
   ok("poster shows gift thumbnails (bilingual names), can hide them, and prints on one US Letter page either way");
+
+  section("Two last names: either surname, both, or the full name signs in");
+  const twoNames = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 1, locale: "en-US" });
+  const tn = await twoNames.newPage();
+  async function tryLogin(lastName) {
+    await tn.goto(`${BASE}/g/${SLUG}`);
+    await tn.fill("#employeeNumber", `E2E${run}4`);
+    await tn.fill("#lastName", lastName);
+    await tn.click("button[type=submit]");
+    const outcome = await Promise.race([
+      tn.waitForURL(new RegExp(`/g/${SLUG}/pick`), { timeout: 15000 }).then(() => "in"),
+      tn.waitForSelector("text=/couldn't find an employee/", { timeout: 15000 }).then(() => "rejected"),
+    ]);
+    if (outcome === "in") {
+      await tn.waitForSelector("text=Hi Rosa!");
+      await tn.goto(`${BASE}/g/${SLUG}/logout`);
+    }
+    return outcome;
+  }
+  assert((await tn.goto(`${BASE}/g/${SLUG}`), await tn.locator("text=Last name(s)").count()) === 1, "landing page asks for last name(s)");
+  assert((await tryLogin("Garcia")) === "rejected", "a wrong surname is rejected");
+  for (const typed of ["Sanchez", "martinez", "Martínez Sánchez", "Sanchez-Martinez", "Rosa Martínez Sánchez"]) {
+    assert((await tryLogin(typed)) === "in", `"${typed}" signs in for Rosa Martínez Sánchez`);
+  }
+  await twoNames.close();
+  ok("either last name, both (any order or hyphenated) and the full name are accepted; a wrong surname is not");
 
   section("Employee flow in Spanish: identity check with employee number + last name");
   const emp = await browser.newContext({ viewport: { width: 414, height: 896 }, deviceScaleFactor: 1, locale: "es-MX" });
@@ -508,7 +560,7 @@ try {
   });
   assert(foundHoodie, "Summary sheet has Company Hoodie / L row");
   const notPicked = wb.getWorksheet("Not picked");
-  assert(notPicked.rowCount === 3, `Not picked lists the 2 remaining employees (rows=${notPicked.rowCount})`);
+  assert(notPicked.rowCount === 4, `Not picked lists the 3 remaining employees (rows=${notPicked.rowCount})`);
   ok("workbook has all sheets, the hoodie line and the not-picked list");
 
   section("Live spreadsheet feeds work without a login");

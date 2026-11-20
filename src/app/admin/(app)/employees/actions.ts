@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { audit } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth";
-import { normalizeEmployeeNumber, parseEmployeeCsv } from "@/lib/csv";
+import { normalizeEmployeeNumber } from "@/lib/csv";
+import { parseEmployeeFile } from "@/lib/employee-import";
 import { db } from "@/lib/db";
 
 export type ImportState = { error?: string; summary?: { created: number; updated: number; skipped: number; eligible?: number; errors: string[] } } | null;
@@ -18,10 +19,9 @@ export async function importEmployeesAction(_prev: ImportState, formData: FormDa
   const file = formData.get("file");
   const campaignId = typeof formData.get("campaignId") === "string" ? String(formData.get("campaignId")) : null;
   const deactivateMissing = formData.get("deactivateMissing") === "on";
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV file first." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a CSV or Excel file first." };
   if (file.size > 5 * 1024 * 1024) return { error: "File is too large (max 5 MB)." };
-  const text = await file.text();
-  const parsed = parseEmployeeCsv(text);
+  const parsed = await parseEmployeeFile(Buffer.from(await file.arrayBuffer()), file.name);
   if (parsed.rows.length === 0) return { error: parsed.errors[0] ?? "No employee rows found." };
 
   let created = 0;

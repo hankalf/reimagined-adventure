@@ -15,23 +15,39 @@ export function normalizeName(value: string): string {
     .trim();
 }
 
-/**
- * Does the typed last name match the stored one? Accepts the whole name, or any single part of a
- * multi-part surname ("de la Cruz" matches "cruz", "Smith-Jones" matches "jones").
- */
 const NAME_PARTICLES = new Set(["de", "la", "del", "las", "los", "da", "das", "do", "dos", "di", "van", "von", "der", "den", "le", "el", "y", "e", "al", "bin", "ibn", "mc", "mac", "st"]);
 
-export function lastNameMatches(input: string, stored: string): boolean {
+/** Name parts that identify a person: at least 2 letters and not a particle like "de" or "la". */
+function significantParts(normalized: string): string[] {
+  return normalized.split(" ").filter((p) => p.length >= 2 && !NAME_PARTICLES.has(p));
+}
+
+/**
+ * Does what the employee typed match the last name on file? Built for people with two surnames:
+ *   on file "Hernández López" → "Hernandez", "López", "Hernández López", "Lopez-Hernandez" all match;
+ *   on file "García" → "García López" also matches (the list only has the first surname);
+ *   "Luis Hernández López" matches too when the first name is supplied (first-name words are ignored).
+ * Case, accents, hyphens and particles ("de la") don't matter. A wrong surname never matches.
+ */
+export function lastNameMatches(input: string, stored: string, firstName?: string | null): boolean {
   const a = normalizeName(input);
   const b = normalizeName(stored);
   if (!a || !b) return false;
   if (a === b) return true;
-  const significant = (parts: string[]) => parts.filter((p) => p.length > 2 && !NAME_PARTICLES.has(p));
-  const storedParts = significant(b.split(" "));
-  const inputParts = significant(a.split(" "));
-  if (inputParts.length === 0) return false;
-  if (inputParts.length === 1 && storedParts.includes(inputParts[0])) return true;
-  if (inputParts.length > 1 && inputParts.every((p) => storedParts.includes(p))) return true;
+
+  const storedParts = significantParts(b);
+  let typedParts = significantParts(a);
+  if (firstName) {
+    const firstParts = new Set(significantParts(normalizeName(firstName)));
+    const withoutFirst = typedParts.filter((p) => !firstParts.has(p) || storedParts.includes(p));
+    if (withoutFirst.length > 0) typedParts = withoutFirst;
+  }
+  if (typedParts.length === 0 || storedParts.length === 0) return false;
+
+  // Everything typed is part of the surname on file (one surname, both, any order).
+  if (typedParts.every((p) => storedParts.includes(p))) return true;
+  // Everything on file was typed (file has one surname, employee typed both).
+  if (storedParts.every((p) => typedParts.includes(p))) return true;
   return false;
 }
 

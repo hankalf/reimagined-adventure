@@ -35,7 +35,7 @@ export default async function EmployeesPage({ searchParams }: PageProps<"/admin/
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <section className="card p-5">
-          <h2 className="mb-3 font-semibold">Import from CSV</h2>
+          <h2 className="mb-3 font-semibold">Import from Excel or CSV</h2>
           <ImportForm />
         </section>
         <section className="card p-5">

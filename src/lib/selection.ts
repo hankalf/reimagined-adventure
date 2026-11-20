@@ -61,7 +61,7 @@ export async function identifyEmployee(input: {
   const employee = exact ?? (employees.length === 1 ? employees[0] : undefined);
   if (!employee) return { ok: false, reason: "not_found" };
 
-  if (input.campaign.requireLastName && !lastNameMatches(input.lastName, employee.lastName)) {
+  if (input.campaign.requireLastName && !lastNameMatches(input.lastName, employee.lastName, employee.firstName)) {
     return { ok: false, reason: "not_found" };
   }
   if (!input.campaign.allEmployeesEligible && employee.campaigns.length === 0) {

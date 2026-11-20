@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { deleteEmployeeAction, toggleEmployeeActiveAction } from "./actions";
 import { EmployeeForm } from "./employee-form";
 import { ImportForm } from "./import-form";
+import { employeeListWhere } from "@/lib/employee-import";
 
 export default async function EmployeesPage({ searchParams }: PageProps<"/admin/employees">) {
   const sp = await searchParams;
@@ -12,10 +13,7 @@ export default async function EmployeesPage({ searchParams }: PageProps<"/admin/
   const editId = typeof sp.edit === "string" ? sp.edit : null;
   const [employees, total, active] = await Promise.all([
     db.employee.findMany({
-      where: {
-        ...(showInactive ? {} : { active: true }),
-        ...(q ? { OR: [{ employeeNumber: { contains: q, mode: "insensitive" } }, { firstName: { contains: q, mode: "insensitive" } }, { lastName: { contains: q, mode: "insensitive" } }, { department: { contains: q, mode: "insensitive" } }] } : {}),
-      },
+      where: employeeListWhere({ q, includeInactive: showInactive }),
       include: { _count: { select: { selections: true } } },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       take: 500,
@@ -24,10 +22,20 @@ export default async function EmployeesPage({ searchParams }: PageProps<"/admin/
     db.employee.count({ where: { active: true } }),
   ]);
   const editing = editId ? employees.find((e) => e.id === editId) ?? (await db.employee.findUnique({ where: { id: editId } })) : null;
+  const exportQuery = new URLSearchParams({ ...(q ? { q } : {}), ...(showInactive ? { inactive: "1" } : {}) }).toString();
+  const exportHref = `/api/employees/export${exportQuery ? `?${exportQuery}` : ""}`;
 
   return (
     <div>
-      <PageHeader title="Employees" description="The master list employees are validated against when they enter their employee number and last name." />
+      <PageHeader
+        title="Employees"
+        description="The master list employees are validated against when they enter their employee number and last name."
+        actions={
+          <a href={exportHref} className="btn-secondary" data-employee-export title={q || showInactive ? "Exports the list as currently filtered" : "Exports all active employees"}>
+            ⬇ Export to Excel{q || showInactive ? " (filtered)" : ""}
+          </a>
+        }
+      />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Active employees" value={active} />
         <Stat label="Total on file" value={total} />
@@ -105,7 +113,7 @@ export default async function EmployeesPage({ searchParams }: PageProps<"/admin/
             ))}
           </tbody>
         </table>
-        {employees.length === 500 && <p className="p-3 text-xs text-slate-500">Showing the first 500 matches. Narrow your search to see more.</p>}
+        {employees.length === 500 && <p className="p-3 text-xs text-slate-500">Showing the first 500 matches. Narrow your search to see more, or use Export to Excel for the full list.</p>}
       </div>
     </div>
   );

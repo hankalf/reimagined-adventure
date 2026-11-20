@@ -203,6 +203,26 @@ try {
   assert((await a.locator("tr", { hasText: `E2E${run}4` }).filter({ hasText: "Rosa Martínez Sánchez" }).count()) === 1, "simple-sheet employee imported with first name Rosa and last name Martínez Sánchez");
   ok("templates download; an Excel sheet with only Employee # and 'Last, First' imports correctly and its example rows are ignored");
 
+  section("Export the current employee list to Excel");
+  await a.goto(`${BASE}/admin/employees?q=${encodeURIComponent(`E2E${run}`)}`);
+  const exportHref = await a.locator("[data-employee-export]").getAttribute("href");
+  assert(exportHref === `/api/employees/export?q=E2E${run}`, `export button follows the page's search (${exportHref})`);
+  assert((await a.locator("[data-employee-export]").innerText()).includes("(filtered)"), "button says the export is filtered");
+  const [download] = await Promise.all([a.waitForEvent("download"), a.click("[data-employee-export]")]);
+  assert(/^employees-\d{4}-\d{2}-\d{2}\.xlsx$/.test(download.suggestedFilename()), `download is named employees-<date>.xlsx (${download.suggestedFilename()})`);
+  const exportWb = new ExcelJS.Workbook();
+  await exportWb.xlsx.readFile(await download.path());
+  const exportSheet = exportWb.getWorksheet("Employees");
+  const exported = [];
+  exportSheet.eachRow((row, n) => {
+    if (n > 1) exported.push(row.values.slice(1, 4).map(String).join("|"));
+  });
+  assert(exported.length === 4, `export holds this run's 4 employees (${exported.length})`);
+  assert(exported.includes(`E2E${run.toUpperCase()}4|Rosa|Martínez Sánchez`), `export has the two-surname employee (${exported.join("; ")})`);
+  const anonExport = await (await browser.newContext()).request.get(`${BASE}/api/employees/export`);
+  assert(anonExport.status() === 401, "export requires an admin login");
+  ok("Export to Excel downloads the filtered employee list in the upload layout");
+
   section("Branding: enable the dancing elf with an uploaded face");
   const face = await sharp({ create: { width: 400, height: 400, channels: 3, background: { r: 250, g: 210, b: 170 } } }).png().toBuffer();
   const facePath = path.join(SHOTS, "face.png");

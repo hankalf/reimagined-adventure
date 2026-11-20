@@ -37,3 +37,25 @@ describe("employee templates", () => {
     expect(res.errors[0]).toMatch(/Could not read the Excel file/);
   });
 });
+
+describe("employee list export", () => {
+  it("exports in the upload layout so the file can be uploaded back", async () => {
+    const { buildEmployeeListWorkbook } = await import("@/lib/employee-import");
+    const buf = await buildEmployeeListWorkbook([
+      { employeeNumber: "00777", firstName: "Rosa", lastName: "Martínez Sánchez", department: "Ops", email: "rosa@example.com", active: true, giftsChosen: 1, createdAt: new Date("2026-11-01") },
+      { employeeNumber: "20002", firstName: "Jim", lastName: "Smith", department: null, email: null, active: false, giftsChosen: 0, createdAt: new Date("2026-10-01") },
+    ]);
+    const res = await parseEmployeeFile(buf, "employees.xlsx");
+    expect(res.errors).toEqual([]);
+    expect(res.rows).toEqual([
+      { employeeNumber: "00777", firstName: "Rosa", lastName: "Martínez Sánchez", department: "Ops", email: "rosa@example.com", budget: null },
+      { employeeNumber: "20002", firstName: "Jim", lastName: "Smith", department: null, email: null, budget: null },
+    ]);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const ws = wb.getWorksheet("Employees")!;
+    expect(ws.getRow(1).values).toEqual([undefined, "employee_number", "first_name", "last_name", "department", "email", "status", "gifts_chosen", "added"]);
+    expect(ws.getRow(3).getCell(6).value).toBe("Inactive");
+  });
+});

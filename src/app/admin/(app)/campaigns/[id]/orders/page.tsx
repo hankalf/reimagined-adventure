@@ -2,8 +2,9 @@ import { Stat } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
 import { money } from "@/lib/utils";
-import { bulkItemStatusAction, orderRowAction } from "../../actions";
-import { Alert } from "@/components/ui";
+import { bulkItemStatusAction, markCartOrderedAction, orderRowAction } from "../../actions";
+import { Alert, ConfirmButton } from "@/components/ui";
+import { planAmazonCart } from "@/lib/amazon-cart";
 import { OrdersTable, type OrderRow } from "./orders-table";
 
 export default async function OrdersPage({ params, searchParams }: PageProps<"/admin/campaigns/[id]/orders">) {
@@ -13,6 +14,11 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
   const q = typeof sp.q === "string" ? sp.q.trim().toLowerCase() : "";
   const [campaign, data] = await Promise.all([db.campaign.findUniqueOrThrow({ where: { id } }), buildReportData(id)]);
   const saved = typeof sp.saved === "string" ? sp.saved : null;
+  // One-click Amazon cart: product lines that still need ordering.
+  const toOrderLines = data.summary.filter((r) => r.type === "PRODUCT" && (r.byStatus.SELECTED ?? 0) > 0);
+  const cart = planAmazonCart(toOrderLines.map((r) => ({ itemId: r.itemId, name: r.name, asin: r.asin, productUrl: r.productUrl, quantity: r.byStatus.SELECTED ?? 0, optionText: r.optionDetail || r.optionText })));
+  // The exact picks in the cart, so a pick made after the cart was opened is not marked ordered by mistake.
+  const cartSelectionIds = data.detail.filter((d) => d.status === "SELECTED" && cart.itemIds.includes(d.itemId)).map((d) => d.selectionId);
 
   let rows = data.detail;
   if (status) rows = rows.filter((r) => r.status === status);
@@ -44,6 +50,76 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
         <Stat label="Collected" value={data.counts.collected} tone="good" />
         <Stat label="Need re-pick" value={data.counts.needsRepick} tone={data.counts.needsRepick > 0 ? "warn" : "default"} />
       </div>
+
+      <section className="card p-5" data-amazon-cart>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">🛒 Order on Amazon</h2>
+            <p className="max-w-2xl text-xs text-slate-500">
+              Opens Amazon with every gift still to order already in your cart, at the right quantities. Sign in to your company Amazon (or Amazon Business) account, review the cart and check
+              out, then come back and mark them ordered.
+            </p>
+          </div>
+          {cart.totalUnits > 0 && (
+            <form action={markCartOrderedAction}>
+              <input type="hidden" name="campaignId" value={id} />
+              {cartSelectionIds.map((sid) => (
+                <input key={sid} type="hidden" name="selectionIds" value={sid} />
+              ))}
+              <ConfirmButton message={`Mark the ${cart.totalUnits} unit(s) from the Amazon cart as ordered? Do this after you have checked out on Amazon.`} className="btn-secondary btn-sm" data-cart-mark-ordered>
+                ✓ I checked out: mark {cart.totalUnits} ordered
+              </ConfirmButton>
+            </form>
+          )}
+        </div>
+        {cart.totalUnits === 0 && cart.notOnAmazon.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">Nothing is waiting to be ordered right now.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {cart.links.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {cart.links.map((l) => (
+                  <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer" className="btn-primary" data-cart-link>
+                    🛒 Open Amazon cart
+                    {l.parts > 1 ? ` (part ${l.part} of ${l.parts})` : ""} · {l.lines.length} item{l.lines.length === 1 ? "" : "s"}, {l.units} unit{l.units === 1 ? "" : "s"}
+                    {l.host !== "www.amazon.com" ? ` · ${l.host.replace("www.", "")}` : ""}
+                  </a>
+                ))}
+              </div>
+            )}
+            {cart.links.length > 0 && (
+              <details className="text-xs text-slate-600">
+                <summary className="cursor-pointer">What goes in the cart</summary>
+                <ul className="mt-1 list-disc pl-5">
+                  {cart.links.flatMap((l) => l.lines).map((line) => (
+                    <li key={line.asin}>
+                      {line.quantity} × {line.name} <span className="font-mono text-slate-400">{line.asin}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {cart.checkVariants.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-cart-variants>
+                <strong>Check colour / size in the cart.</strong> Amazon adds the product on file; change the variant in the cart if needed:
+                <ul className="mt-1 list-disc pl-5">
+                  {cart.checkVariants.map((v) => (
+                    <li key={v.asin}>
+                      {v.name}: {v.options.join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {cart.notOnAmazon.length > 0 && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" data-cart-not-amazon>
+                <strong>Order these another way</strong> (no Amazon ASIN on file):{" "}
+                {cart.notOnAmazon.map((n) => `${n.quantity} × ${n.name}`).join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="card overflow-x-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 p-4">

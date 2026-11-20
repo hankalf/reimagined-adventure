@@ -25,6 +25,7 @@ Built with Next.js 16 (App Router), Prisma 7, PostgreSQL, Tailwind 4. Designed t
 - Pickup kiosk (`/admin/campaigns/<id>/kiosk`): full-screen page for the front desk. Scan the QR code on the employee's confirmation page with the device camera (BarcodeDetector where available, jsQR fallback), or type/USB-scan the confirmation code, employee number or name; see who they are and what they chose; mark collected in one tap with undo. Live collected/ready counters.
 - Budget: total vs committed vs ordered, spend per gift, per-employee budget vs cost with over-budget flags.
 - Orders spreadsheet (Settings): one live link for all campaigns that Excel ("Get Data → From Web") or Google Sheets (`IMPORTDATA`) refreshes automatically, plus a push webhook that POSTs every order change (chosen, changed, ordered, received, collected, reset, re-priced) to Power Automate, Zapier, Make or your own endpoint so a sheet fills itself. Per-campaign Excel downloads and live links on the campaign's "Excel & live sheet" tab.
+- One-click Amazon cart: the Orders tab opens Amazon with every gift still to order already in the cart at the right quantities (ASIN from the gift, or read from its Amazon link; one cart per marketplace, split into parts of 20 items). Colours/sizes are listed so HR can check the variant in the cart, gifts not on Amazon are listed separately, and "I checked out" marks exactly the picks that were in the cart as ordered.
 - Order-time pricing: type the price actually paid on the Orders row before marking it ordered; the gift is re-priced everywhere and every change is kept in the gift's price history.
 - QR poster: printable bilingual A4 page; PNG/SVG download.
 - Branding per campaign: logo, hero image, primary/accent colours, bilingual headline, welcome, pickup instructions and leadership message.
@@ -86,6 +87,7 @@ src/lib/report.ts                 one data builder behind Orders, Budget, CSV an
 src/lib/excel.ts                  exceljs workbook
 src/lib/webhook.ts                orders webhook (push) + global live feed token
 src/lib/pricing.ts                order-time price updates and price history
+src/lib/amazon-cart.ts            one-click Amazon cart links from the to-order list
 src/i18n/                         en/es dictionaries for the employee UI
 prisma/schema.prisma              data model; prisma/seed.ts demo data
 ```

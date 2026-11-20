@@ -523,6 +523,28 @@ try {
   await e.waitForURL(new RegExp(`/g/${SLUG}/done`));
   ok("re-picked hoodie size L");
 
+  section("One-click Amazon cart: link with ASIN + quantity, variant check, mark the cart ordered");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/orders`);
+  const cartLinks = a.locator("[data-amazon-cart] a[data-cart-link]");
+  assert((await cartLinks.count()) === 1, "one Amazon cart link");
+  const cartHref = await cartLinks.getAttribute("href");
+  // The seed hoodie has no ASIN typed in, only an Amazon link: the ASIN is read from the link.
+  assert(cartHref === "https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=B07P5RTMQ6&Quantity.1=1", `cart link carries the ASIN and quantity (${cartHref})`);
+  assert((await cartLinks.getAttribute("target")) === "_blank", "cart opens in a new tab");
+  assert((await a.locator("[data-cart-variants]", { hasText: "Company Hoodie" }).locator("text=/Size: L/").count()) === 1, "variant check lists the hoodie size");
+  ok("cart link adds 1 × B07P5RTMQ6 (ASIN taken from the product link); size flagged for a check in the cart");
+  a.once("dialog", (d) => d.accept());
+  await a.locator("[data-cart-mark-ordered]").click();
+  await a.waitForSelector("text=1 pick(s) from the Amazon cart marked ordered.");
+  await a.waitForSelector("[data-amazon-cart] >> text=Nothing is waiting to be ordered right now.");
+  assert((await a.locator("[data-cart-link]").count()) === 0, "cart empties once ordered");
+  ok("\"I checked out\" marked the cart's pick ordered");
+  // Put it back to "to order" so the price-confirmation flow below runs as HR would without the cart.
+  await a.getByLabel(/^Select Test1/).check();
+  await a.click('button:has-text("Back to “to order”")');
+  await a.waitForSelector("[data-amazon-cart] a[data-cart-link]");
+  ok("moved back to \"to order\" from the orders table");
+
   section("Orders list: grouped summary, bulk mark ordered, received, collected");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/orders`);
   const group = a.locator("tr", { hasText: "Company Hoodie" }).filter({ hasText: "Mark 1 ordered" });

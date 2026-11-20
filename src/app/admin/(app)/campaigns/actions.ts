@@ -575,6 +575,19 @@ export async function orderRowAction(formData: FormData): Promise<void> {
   redirect(`/admin/campaigns/${campaignId}/orders?saved=${encodeURIComponent(notes.join(" ") || "Nothing changed.")}`);
 }
 
+/** After checking out the Amazon cart: mark every not-yet-ordered pick of those gifts as ordered. */
+export async function markCartOrderedAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const campaignId = s(formData, "campaignId");
+  const selectionIds = formData.getAll("selectionIds").map(String).filter(Boolean);
+  // Only picks that are still waiting to be ordered (one may have been changed or cancelled since the cart was opened).
+  const rows = selectionIds.length > 0 ? await db.selection.findMany({ where: { campaignId, id: { in: selectionIds }, status: "SELECTED" }, select: { id: true } }) : [];
+  const n = await updateSelectionStatuses({ ids: rows.map((r) => r.id), status: "ORDERED", adminId: admin.id });
+  await audit({ actorType: "ADMIN", actorId: admin.id, action: "amazon_cart.marked_ordered", entityType: "Campaign", entityId: campaignId, meta: { selections: n } });
+  revalidateCampaign(campaignId);
+  redirect(`/admin/campaigns/${campaignId}/orders?saved=${encodeURIComponent(`${n} pick(s) from the Amazon cart marked ordered.`)}`);
+}
+
 export async function pickOnBehalfAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const admin = await requireAdmin();
   const campaignId = s(formData, "campaignId");

@@ -11,7 +11,6 @@ import { DancingMascot } from "@/components/dancing-mascot";
 import { mascotFaceProps } from "@/lib/mascot";
 import { ItemThumb } from "@/components/item-thumb";
 import { campaignAcceptsPicks, changeState } from "@/lib/selection-rules";
-import { LocalTime } from "@/components/local-time";
 import { loadCampaign } from "../campaign";
 
 export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) {
@@ -111,7 +110,9 @@ export default async function DonePage({ params }: PageProps<"/g/[slug]/done">) 
               (change.deadline ? (
                 <p className="mt-5 text-sm text-slate-600" data-change-deadline>
                   {untilBefore}
-                  <LocalTime iso={change.deadline.toISOString()} lang={lang} fallback={`${formatDateTime(change.deadline, lang, "UTC")} UTC`} />
+                  <time dateTime={change.deadline.toISOString()} data-local-time className="whitespace-nowrap font-semibold">
+                    {formatDateTime(change.deadline, lang)}
+                  </time>
                   {untilAfter}
                 </p>
               ) : (

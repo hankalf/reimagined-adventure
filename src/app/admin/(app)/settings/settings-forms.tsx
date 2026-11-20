@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { saveOrdersWebhookAction, saveSettingsAction, testOrdersWebhookAction, type SettingsState } from "./actions";
 
 export function DefaultsForm({ isAdmin, companyName }: { isAdmin: boolean; companyName: string }) {
@@ -58,7 +59,7 @@ export function WebhookForm({ isAdmin, url, secret, lastStatus, lastAt, lastErro
           {testing ? "Sending…" : "Send a test event"}
         </button>
         <span className="text-xs text-slate-500">
-          Last delivery: {lastStatus ? `${lastStatus}${lastAt ? ` at ${new Date(lastAt).toLocaleString()}` : ""}` : "never"}
+          Last delivery: {lastStatus ? `${lastStatus}${lastAt ? ` at ${fmtDate(lastAt, true)}` : ""}` : "never"}
           {lastError ? ` — ${lastError}` : ""}
         </span>
         {testState?.error && <p className="w-full text-sm text-red-700">{testState.error}</p>}

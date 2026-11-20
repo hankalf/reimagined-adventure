@@ -1,6 +1,7 @@
 /** Pure business rules for identifying employees and deciding gift availability. No database access here. */
 
 import { normalizeEmployeeNumber } from "./csv";
+import { closesAtInstant, opensAtInstant } from "./time-zone";
 
 export { normalizeEmployeeNumber };
 
@@ -92,12 +93,17 @@ export function itemAvailability(input: AvailabilityInput): Availability {
 
 export type CampaignWindow = { status: "DRAFT" | "OPEN" | "CLOSED"; opensAt: Date | null; closesAt: Date | null };
 
-/** A campaign accepts picks when it is OPEN and the current time is inside its optional window. */
+/**
+ * A campaign accepts picks when it is OPEN and the current time is inside its optional window: from the start of
+ * the open date until 11:59 PM on the close date, Eastern Time.
+ */
 export function campaignAcceptsPicks(c: CampaignWindow, now = new Date()): { ok: boolean; reason?: "draft" | "closed" | "not_yet_open" | "expired" } {
   if (c.status === "DRAFT") return { ok: false, reason: "draft" };
   if (c.status === "CLOSED") return { ok: false, reason: "closed" };
-  if (c.opensAt && now < c.opensAt) return { ok: false, reason: "not_yet_open" };
-  if (c.closesAt && now > c.closesAt) return { ok: false, reason: "expired" };
+  const opens = opensAtInstant(c);
+  const closes = closesAtInstant(c);
+  if (opens && now < opens) return { ok: false, reason: "not_yet_open" };
+  if (closes && now > closes) return { ok: false, reason: "expired" };
   return { ok: true };
 }
 

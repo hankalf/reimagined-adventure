@@ -1,3 +1,5 @@
+import { APP_TIME_ZONE } from "./time-zone";
+
 export function slugify(input: string): string {
   return input
     .normalize("NFD")
@@ -24,10 +26,14 @@ export function money(amount: number | null | undefined, currency = "USD"): stri
   }
 }
 
+/** A moment in Eastern Time: "Nov 20, 2026" or "Nov 20, 2026, 4:34 PM EST". (Campaign open/close dates: formatCalendarDate.) */
 export function fmtDate(value: Date | string | null | undefined, withTime = false): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat("en-US", withTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" }).format(d);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    withTime ? { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: APP_TIME_ZONE, timeZoneName: "short" } : { dateStyle: "medium", timeZone: APP_TIME_ZONE },
+  ).format(d);
 }
 
 export function cn(...parts: Array<string | false | null | undefined>): string {

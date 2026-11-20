@@ -28,7 +28,7 @@ export function NewCampaignForm({ existing }: { existing: { id: string; name: st
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label htmlFor="closesAt" className="label">
-            Selections close
+            Selections close (11:59 PM ET)
           </label>
           <input id="closesAt" name="closesAt" type="date" className="input" />
         </div>

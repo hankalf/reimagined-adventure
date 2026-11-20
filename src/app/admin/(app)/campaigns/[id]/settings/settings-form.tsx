@@ -57,13 +57,13 @@ export function SettingsForm({ campaign, canDelete, selectionCount }: { campaign
             </div>
             <div>
               <label htmlFor="opensAt" className="label">
-                Opens (optional)
+                Opens (optional) · from 12:00 AM Eastern
               </label>
               <input id="opensAt" name="opensAt" type="date" defaultValue={campaign.opensAt} className="input" />
             </div>
             <div>
               <label htmlFor="closesAt" className="label">
-                Selections close (optional)
+                Selections close (optional) · at 11:59 PM Eastern
               </label>
               <input id="closesAt" name="closesAt" type="date" defaultValue={campaign.closesAt} className="input" />
             </div>

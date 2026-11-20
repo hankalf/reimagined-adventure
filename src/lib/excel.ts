@@ -1,4 +1,5 @@
 import "server-only";
+import { excelEastern } from "./time-zone";
 import ExcelJS from "exceljs";
 import type { ReportData } from "./report";
 import { SELECTION_STATUS_LABEL } from "./utils";
@@ -90,10 +91,10 @@ export async function buildOrdersWorkbook(data: ReportData, opts: { onlyNew?: bo
     { header: "Over budget", key: "over", width: 12 },
     { header: "Status", key: "status", width: 14 },
     { header: "Confirmation", key: "code", width: 13 },
-    { header: "Selected at", key: "selectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
-    { header: "Ordered at", key: "orderedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
-    { header: "Received at", key: "receivedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
-    { header: "Collected at", key: "collectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Selected at (ET)", key: "selectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Ordered at (ET)", key: "orderedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Received at (ET)", key: "receivedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Collected at (ET)", key: "collectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
     { header: "Product link", key: "link", width: 44 },
     { header: "Language", key: "lang", width: 10 },
     { header: "New since last email", key: "isNew", width: 12 },
@@ -113,10 +114,10 @@ export async function buildOrdersWorkbook(data: ReportData, opts: { onlyNew?: bo
       over: r.overBudget ? "Yes" : "",
       status: SELECTION_STATUS_LABEL[r.status] ?? r.status,
       code: r.confirmationCode,
-      selectedAt: r.selectedAt,
-      orderedAt: r.orderedAt,
-      receivedAt: r.receivedAt,
-      collectedAt: r.collectedAt,
+      selectedAt: excelEastern(r.selectedAt),
+      orderedAt: excelEastern(r.orderedAt),
+      receivedAt: excelEastern(r.receivedAt),
+      collectedAt: excelEastern(r.collectedAt),
       link: r.productUrl ?? "",
       lang: r.language,
       isNew: r.isNew ? "Yes" : "",
@@ -160,7 +161,7 @@ export async function buildOrdersWorkbook(data: ReportData, opts: { onlyNew?: bo
 
   // Info
   const info = wb.addWorksheet("Info");
-  info.addRow(["Generated", data.generatedAt]);
+  info.addRow(["Generated (ET)", excelEastern(data.generatedAt)]);
   info.addRow(["Campaign", data.campaign.name]);
   info.addRow(["Status", data.campaign.status]);
   info.addRow(["Eligible employees", data.counts.eligible]);
@@ -171,7 +172,7 @@ export async function buildOrdersWorkbook(data: ReportData, opts: { onlyNew?: bo
   info.addRow(["Received", data.counts.received]);
   info.addRow(["Collected", data.counts.collected]);
   info.addRow(["Need re-pick", data.counts.needsRepick]);
-  if (data.since) info.addRow(["Only new since", data.since]);
+  if (data.since) info.addRow(["Only new since (ET)", excelEastern(data.since)]);
   info.getColumn(1).width = 22;
   info.getColumn(2).width = 30;
   info.getCell("B1").numFmt = "yyyy-mm-dd hh:mm";
@@ -197,10 +198,10 @@ export async function buildAllOrdersWorkbook(reports: ReportData[]): Promise<Buf
     { header: "Cost", key: "cost", width: 12, style: { numFmt: currencyFormat(reports[0]?.campaign.currency ?? "USD") } },
     { header: "Status", key: "status", width: 14 },
     { header: "Confirmation", key: "code", width: 13 },
-    { header: "Selected at", key: "selectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
-    { header: "Ordered at", key: "orderedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
-    { header: "Received at", key: "receivedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
-    { header: "Collected at", key: "collectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Selected at (ET)", key: "selectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Ordered at (ET)", key: "orderedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Received at (ET)", key: "receivedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
+    { header: "Collected at (ET)", key: "collectedAt", width: 20, style: { numFmt: "yyyy-mm-dd hh:mm" } },
     { header: "Product link", key: "link", width: 44 },
   ];
   for (const data of reports) {
@@ -217,10 +218,10 @@ export async function buildAllOrdersWorkbook(reports: ReportData[]): Promise<Buf
         cost: r.cost,
         status: SELECTION_STATUS_LABEL[r.status] ?? r.status,
         code: r.confirmationCode,
-        selectedAt: r.selectedAt,
-        orderedAt: r.orderedAt,
-        receivedAt: r.receivedAt,
-        collectedAt: r.collectedAt,
+        selectedAt: excelEastern(r.selectedAt),
+        orderedAt: excelEastern(r.orderedAt),
+        receivedAt: excelEastern(r.receivedAt),
+        collectedAt: excelEastern(r.collectedAt),
         link: r.productUrl ?? "",
       });
       if (r.productUrl) row.getCell("link").value = { text: r.productUrl, hyperlink: r.productUrl };

@@ -8,6 +8,7 @@ import { ItemThumb } from "@/components/item-thumb";
 import { imageSrc } from "@/lib/image-src";
 import { mascotFaceProps } from "@/lib/mascot";
 import { posterLayout, posterTiles } from "@/lib/poster";
+import { formatCalendarDate } from "@/lib/time-zone";
 
 const PX_PER_IN = 96;
 
@@ -147,10 +148,10 @@ export default async function PosterPage({ params, searchParams }: PageProps<"/a
           {campaign.closesAt && (
             <footer className="w-full leading-tight" data-poster-deadline>
               <p className="font-black" style={{ color: campaign.primaryColor, fontSize: "17pt" }}>
-                Choose your gift by {campaign.closesAt.toLocaleDateString("en-US", { dateStyle: "long" })}
+                Choose your gift by {formatCalendarDate(campaign.closesAt, "en-US")}
               </p>
               <p className="font-semibold text-slate-600" style={{ fontSize: "12pt" }}>
-                Elige tu regalo antes del {campaign.closesAt.toLocaleDateString("es-US", { dateStyle: "long" })}
+                Elige tu regalo antes del {formatCalendarDate(campaign.closesAt, "es-US")}
               </p>
             </footer>
           )}

@@ -3,6 +3,7 @@ import { StatusBadge } from "@/components/ui";
 import { EmptyState, PageHeader } from "@/components/admin/page-header";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/utils";
+import { formatCalendarDate } from "@/lib/time-zone";
 import { duplicateCampaignAction } from "./actions";
 
 export default async function CampaignsPage() {
@@ -59,7 +60,7 @@ export default async function CampaignsPage() {
                   </td>
                   <td>{c._count.items}</td>
                   <td>{c._count.selections}</td>
-                  <td>{fmtDate(c.closesAt)}</td>
+                  <td>{c.closesAt ? formatCalendarDate(c.closesAt, "en-US", "medium") : "—"}</td>
                   <td>{fmtDate(c.createdAt)}</td>
                   <td>
                     <form action={duplicateCampaignAction} className="flex justify-end">

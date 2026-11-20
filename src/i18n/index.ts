@@ -1,5 +1,6 @@
 import { en, type Dictionary } from "./en";
 import { es } from "./es";
+import { APP_TIME_ZONE } from "@/lib/time-zone";
 
 export type Lang = "en" | "es";
 export const LANGS: readonly Lang[] = ["en", "es"] as const;
@@ -59,10 +60,10 @@ export function formatMoney(amount: number | null | undefined, currency = "USD",
   }
 }
 
-/** "Dec 1, 3:45 PM" / "1 dic, 3:45 p.m." in the given time zone (the device's own when omitted). */
-export function formatDateTime(date: Date | string, lang: Lang | string = "en", timeZone?: string): string {
+/** "Dec 1, 3:45 PM EST" / "1 dic, 3:45 p.m. EST": Eastern Time, with the zone shown. */
+export function formatDateTime(date: Date | string, lang: Lang | string = "en"): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat(lang === "es" ? "es-US" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone }).format(d);
+  return new Intl.DateTimeFormat(lang === "es" ? "es-US" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: APP_TIME_ZONE, timeZoneName: "short" }).format(d);
 }
 
 export function formatDate(date: Date | string | null | undefined, lang: Lang = "en"): string {
@@ -70,5 +71,6 @@ export function formatDate(date: Date | string | null | undefined, lang: Lang = 
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat(lang === "es" ? "es-US" : "en-US", {
     dateStyle: "long",
+    timeZone: APP_TIME_ZONE,
   }).format(d);
 }

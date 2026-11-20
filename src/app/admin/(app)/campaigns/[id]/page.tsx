@@ -5,7 +5,8 @@ import { launchStatus } from "@/lib/launch";
 import { eligibleEmployees } from "@/lib/report";
 import { db } from "@/lib/db";
 import { buildReportData } from "@/lib/report";
-import { appUrl, fmtDate, money } from "@/lib/utils";
+import { appUrl, money } from "@/lib/utils";
+import { formatCalendarDate } from "@/lib/time-zone";
 
 export default async function CampaignOverviewPage({ params, searchParams }: PageProps<"/admin/campaigns/[id]">) {
   const { id } = await params;
@@ -110,7 +111,7 @@ export default async function CampaignOverviewPage({ params, searchParams }: Pag
           <dl className="mt-5 space-y-1 text-left text-xs text-slate-600">
             <div className="flex justify-between">
               <dt>Closes</dt>
-              <dd>{fmtDate(campaign.closesAt)}</dd>
+              <dd>{campaign.closesAt ? `${formatCalendarDate(campaign.closesAt, "en-US", "medium")}, 11:59 PM ET` : "—"}</dd>
             </div>
             <div className="flex justify-between">
               <dt>Gifts shown</dt>

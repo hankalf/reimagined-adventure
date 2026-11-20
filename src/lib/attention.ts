@@ -1,4 +1,5 @@
 import "server-only";
+import { closesAtInstant, opensAtInstant } from "./time-zone";
 import { db } from "./db";
 import { eligibleEmployees } from "./report";
 import { getSetting } from "./settings";
@@ -17,15 +18,16 @@ export async function needsAttention(): Promise<AttentionItem[]> {
     const repicks = await db.selection.count({ where: { campaignId: c.id, status: "NEEDS_REPICK" } });
     if (repicks > 0) out.push({ level: "warn", text: `${c.name}: ${repicks} employee(s) still need to re-pick a gift.`, href: `${base}/employees?filter=repick` });
     if (c.status === "OPEN") {
-      const openedFor = (now - (c.opensAt ?? c.createdAt).getTime()) / 86_400_000;
+      const openedFor = (now - (opensAtInstant(c) ?? c.createdAt).getTime()) / 86_400_000;
       if (openedFor >= 7) {
         const eligible = await eligibleEmployees(c);
         const picked = await db.selection.count({ where: { campaignId: c.id, status: { in: ["SELECTED", "ORDERED", "RECEIVED", "COLLECTED"] } } });
         const notPicked = eligible.length - picked;
         if (notPicked > 0) out.push({ level: "info", text: `${c.name}: ${notPicked} of ${eligible.length} employees haven't picked after ${Math.floor(openedFor)} days. Export the list to send reminders.`, href: `${base}/employees?filter=notpicked` });
       }
-      if (c.closesAt) {
-        const daysLeft = (c.closesAt.getTime() - now) / 86_400_000;
+      const closes = closesAtInstant(c);
+      if (closes) {
+        const daysLeft = (closes.getTime() - now) / 86_400_000;
         if (daysLeft < 0) out.push({ level: "warn", text: `${c.name} passed its close date but is still open.`, href: `${base}/settings` });
         else if (daysLeft <= 3) out.push({ level: "info", text: `${c.name} closes in ${Math.max(1, Math.ceil(daysLeft))} day(s).`, href: `${base}/settings` });
       }

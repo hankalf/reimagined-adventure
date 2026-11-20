@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { dict, fill, formatDate, localized } from "@/i18n";
+import { dict, fill, localized } from "@/i18n";
+import { closesAtInstant, formatCalendarDate } from "@/lib/time-zone";
 import { getEmployeeSession } from "@/lib/auth";
 import { getLang } from "@/lib/lang";
 import { campaignAcceptsPicks, daysUntil } from "@/lib/selection-rules";
@@ -33,7 +34,7 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
 
   let deadline: string | null = null;
   if (campaign.closesAt && window.ok) {
-    const days = daysUntil(campaign.closesAt);
+    const days = daysUntil(closesAtInstant(campaign) ?? campaign.closesAt);
     deadline = days <= 1 ? t.landing.lastDay : fill(t.landing.daysLeft, { n: days });
   }
 
@@ -61,7 +62,7 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
               style={{ backgroundColor: `${campaign.accentColor}26` }}
             >
               ⏳ {deadline}
-              {campaign.closesAt && <span className="text-slate-500">· {fill(t.landing.closesOn, { date: formatDate(campaign.closesAt, lang) })}</span>}
+              {campaign.closesAt && <span className="text-slate-500">· {fill(t.landing.closesOn, { date: formatCalendarDate(campaign.closesAt, lang === "es" ? "es-US" : "en-US") })}</span>}
             </p>
           )}
         </section>
@@ -80,7 +81,7 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
                 {window.reason === "draft" || window.reason === "not_yet_open" ? (
                   <>
                     {t.landing.campaignDraft}
-                    {campaign.opensAt && <div className="mt-1 text-slate-500">{fill(t.landing.opensOn, { date: formatDate(campaign.opensAt, lang) })}</div>}
+                    {campaign.opensAt && <div className="mt-1 text-slate-500">{fill(t.landing.opensOn, { date: formatCalendarDate(campaign.opensAt, lang === "es" ? "es-US" : "en-US") })}</div>}
                   </>
                 ) : (
                   t.landing.campaignClosed

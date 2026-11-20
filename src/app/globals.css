@@ -200,3 +200,23 @@ html.a11y-contrast .text-slate-600 {
     animation: none !important;
   }
 }
+
+/* ---- Employee page themes (src/lib/theme.ts) ----
+   Text placed directly on the page background follows the theme's text mode; cards stay readable. */
+[data-text="light"] .theme-text {
+  color: #fff !important;
+}
+[data-text="light"] .theme-muted {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+[data-text="light"] .theme-pill {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+[data-text="light"] .theme-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+[data-card-style="glass"] .card {
+  background-color: rgba(255, 255, 255, 0.82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}

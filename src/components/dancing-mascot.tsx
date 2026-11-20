@@ -102,7 +102,7 @@ export function DancingMascot({ kind, faceSrc, faceZoom = 100, faceOffsetX = 0, 
           </svg>
         </button>
       )}
-      {caption && <p className="mt-1 max-w-[260px] text-center text-sm font-semibold text-slate-800">{caption}</p>}
+      {caption && <p className="theme-text mt-1 max-w-[260px] text-center text-sm font-semibold text-slate-800">{caption}</p>}
     </div>
   );
 }

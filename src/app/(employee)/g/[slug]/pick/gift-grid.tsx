@@ -132,11 +132,11 @@ export function GiftGrid({ slug, lang, t, items, currentItemId, allowChange }: P
       </div>
 
       {visible.length === 0 ? (
-        <p className="py-12 text-center text-slate-500">{t.pick.noResults}</p>
+        <p className="theme-muted py-12 text-center text-slate-500">{t.pick.noResults}</p>
       ) : (
         sections.map((section) => (
         <section key={section.key} className="mb-8">
-          {section.title && <h2 className="mb-3 text-lg font-semibold text-slate-900">{section.title}</h2>}
+          {section.title && <h2 className="theme-text mb-3 text-lg font-semibold text-slate-900">{section.title}</h2>}
         <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {section.items.map((item) => {
             const src = imageSrc(item, true);

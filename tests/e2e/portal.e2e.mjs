@@ -266,6 +266,24 @@ try {
   assert((await a.locator("[data-mascot-card]").count()) === 2, "removed mascot is not saved");
   ok("mascots can be added and removed");
 
+  section("Page look: quick theme, uploaded background photo, font");
+  await a.click('[data-quick-theme="winter"]');
+  assert((await a.inputValue("#primaryColor")) === "#1e3a8a" && (await a.inputValue("#bgColor")) === "#1e3a8a", "quick theme fills in the colours");
+  assert((await a.locator('input[name="bgPattern"][value="snow"]').isChecked()) && (await a.inputValue("#cardStyle")) === "glass", "quick theme picks snowfall and frosted cards");
+  const bgPhoto = path.join(SHOTS, "bg-photo.png");
+  fs.writeFileSync(bgPhoto, await sharp({ create: { width: 1600, height: 900, channels: 3, background: { r: 40, g: 90, b: 140 } } }).png().toBuffer());
+  await a.setInputFiles("#bg", bgPhoto);
+  await a.locator("#bgOverlay").fill("50");
+  await a.selectOption("#fontStyle", "classic");
+  assert((await a.locator("[data-page-look-preview]").getAttribute("data-text")) === "light", "preview switches to light text on the darkened photo");
+  await a.click('button:has-text("Save branding")');
+  await a.waitForSelector("text=Branding saved.");
+  await a.reload();
+  assert((await a.inputValue("#fontStyle")) === "classic" && (await a.inputValue("#primaryColor")) === "#1e3a8a", "theme choices saved");
+  assert(((await a.locator("[data-page-look-preview]").getAttribute("style")) ?? "").includes("/api/images/"), "saved background photo shows in the preview");
+  ok("winter quick theme with an uploaded, darkened background photo and classic font saved");
+  await shot(a, "branding-page-look");
+
   section("Launch checklist blocks opening an empty campaign; preview as employee works");
   await a.goto(`${BASE}/admin/campaigns/new`);
   await a.fill("#name", `E2E Empty ${run}`);
@@ -354,6 +372,12 @@ try {
   await e.goto(`${BASE}/g/${SLUG}`);
   await e.waitForSelector("text=Número de empleado");
   ok("landing page rendered in Spanish from Accept-Language");
+  const pageTheme = e.locator("[data-page-theme]");
+  assert((await pageTheme.getAttribute("data-text")) === "light" && (await pageTheme.getAttribute("data-card-style")) === "glass", "employee page uses light text and frosted cards");
+  const themeCss = await pageTheme.evaluate((el) => ({ bg: getComputedStyle(el).backgroundImage, font: getComputedStyle(el).fontFamily }));
+  assert(themeCss.bg.includes("/api/images/") && themeCss.font.includes("Georgia"), `background photo and classic font applied (${themeCss.font})`);
+  assert((await e.locator("h1").first().evaluate((el) => getComputedStyle(el).color)) === "rgb(255, 255, 255)", "headline turns white on the dark background");
+  await shot(e, "landing-themed");
   const elf = e.locator("[data-landing-mascots] [data-elf]");
   assert((await elf.count()) === 1, "only the home-page mascot is shown on the landing page");
   assert((await elf.getAttribute("data-mascot")) === "banana", "the chosen character (dancing banana) is rendered");

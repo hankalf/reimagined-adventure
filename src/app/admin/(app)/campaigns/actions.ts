@@ -12,6 +12,7 @@ import { optionGroups } from "@/lib/options";
 import { applyOrderPrice } from "@/lib/pricing";
 import { launchStatus } from "@/lib/launch";
 import { isMascotKind } from "@/lib/mascot";
+import { isBgPattern, isCardStyle, isFontStyle, isHex, isTextMode } from "@/lib/theme";
 import { employeeNumberCandidates } from "@/lib/selection-rules";
 import { isHexColor, slugify } from "@/lib/utils";
 import { randomBytes } from "node:crypto";
@@ -235,10 +236,10 @@ export async function deleteCampaignAction(formData: FormData): Promise<void> {
 
 // ---------- branding ----------
 
-async function storeUpload(formData: FormData, key: string): Promise<string | null | undefined> {
+async function storeUpload(formData: FormData, key: string, opts: { maxFull?: number } = {}): Promise<string | null | undefined> {
   const file = formData.get(key);
   if (file instanceof File && file.size > 0) {
-    const processed = await processImage(Buffer.from(await file.arrayBuffer()), file.type);
+    const processed = await processImage(Buffer.from(await file.arrayBuffer()), file.type, opts);
     const img = await db.image.create({ data: processed });
     return img.id;
   }
@@ -306,9 +307,11 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
   if (!isHexColor(primaryColor) || !isHexColor(accentColor)) return { error: "Colours must be hex values like #1d4ed8." };
   let logoImageId: string | null | undefined;
   let heroImageId: string | null | undefined;
+  let bgImageId: string | null | undefined;
   try {
     logoImageId = await storeUpload(formData, "logo");
     heroImageId = await storeUpload(formData, "hero");
+    bgImageId = await storeUpload(formData, "bg", { maxFull: 2400 });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not process an image." };
   }
@@ -336,6 +339,14 @@ export async function updateBrandingAction(_prev: FormState, formData: FormData)
       showPickCount: formData.get("showPickCount") === "on",
       notifyEmployeesOnReceived: formData.get("notifyEmployeesOnReceived") === "on",
       mascotEnabled: formData.get("mascotEnabled") === "on",
+      bgPattern: isBgPattern(s(formData, "bgPattern")) ? s(formData, "bgPattern") : "none",
+      bgColor: isHex(s(formData, "bgColor")) ? s(formData, "bgColor") : "#f8fafc",
+      bgColor2: isHex(s(formData, "bgColor2")) ? s(formData, "bgColor2") : "#e2e8f0",
+      bgOverlay: clampInt(s(formData, "bgOverlay"), 0, 80, 35),
+      textMode: isTextMode(s(formData, "textMode")) ? s(formData, "textMode") : "auto",
+      fontStyle: isFontStyle(s(formData, "fontStyle")) ? s(formData, "fontStyle") : "modern",
+      cardStyle: isCardStyle(s(formData, "cardStyle")) ? s(formData, "cardStyle") : "solid",
+      ...(bgImageId !== undefined ? { bgImageId } : {}),
       ...(logoImageId !== undefined ? { logoImageId } : {}),
       ...(heroImageId !== undefined ? { heroImageId } : {}),
     },

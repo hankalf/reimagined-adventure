@@ -39,13 +39,13 @@ export default async function PickPage({ params, searchParams }: PageProps<"/g/[
       )}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">{fill(t.pick.greeting, { name: ctx.employee.firstName })}</h1>
-          <p className="mt-1 text-slate-600">{t.pick.chooseOne}</p>
+          <h1 className="theme-text text-2xl font-bold text-slate-900 md:text-3xl">{fill(t.pick.greeting, { name: ctx.employee.firstName })}</h1>
+          <p className="theme-muted mt-1 text-slate-600">{t.pick.chooseOne}</p>
           {campaign.showBudgetToEmployees && ctx.budget !== null && ctx.budget > 0 && (
-            <p className="mt-1 text-sm font-medium text-slate-700">{fill(t.pick.yourBudget, { amount: formatMoney(ctx.budget, campaign.currency, lang) })}</p>
+            <p className="theme-muted mt-1 text-sm font-medium text-slate-700">{fill(t.pick.yourBudget, { amount: formatMoney(ctx.budget, campaign.currency, lang) })}</p>
           )}
         </div>
-        <a href={`/g/${slug}/logout`} className="text-sm text-slate-500 underline-offset-2 hover:underline">
+        <a href={`/g/${slug}/logout`} className="theme-link text-sm text-slate-500 underline-offset-2 hover:underline">
           {fill(t.pick.notYou, { name: ctx.employee.firstName })}
         </a>
       </div>

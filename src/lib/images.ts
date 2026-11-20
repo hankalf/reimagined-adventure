@@ -20,7 +20,8 @@ const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "
  * Resize an uploaded image to a web-friendly full size (max 1200px) and a 480px thumbnail.
  * Uses sharp when available; falls back to storing the original bytes for both if sharp fails to load.
  */
-export async function processImage(input: Buffer, mime: string): Promise<ProcessedImage> {
+export async function processImage(input: Buffer, mime: string, opts: { maxFull?: number } = {}): Promise<ProcessedImage> {
+  const maxFull = opts.maxFull ?? 1200;
   if (!ALLOWED.has(mime)) throw new Error("Unsupported image type. Please upload a JPG, PNG, WebP, GIF or AVIF file.");
   if (input.byteLength > MAX_UPLOAD_BYTES) throw new Error("Image is too large. Maximum size is 8 MB.");
   try {
@@ -29,7 +30,7 @@ export async function processImage(input: Buffer, mime: string): Promise<Process
     const meta = await base.metadata();
     const full = await base
       .clone()
-      .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
+      .resize({ width: maxFull, height: maxFull, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 85 })
       .toBuffer({ resolveWithObject: true });
     const thumb = await base

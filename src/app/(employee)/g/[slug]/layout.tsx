@@ -3,6 +3,7 @@ import { dict } from "@/i18n";
 import { getLang } from "@/lib/lang";
 import { loadCampaign } from "./campaign";
 import { A11yToggle } from "@/components/a11y-toggle";
+import { pageThemeAttrs } from "@/lib/theme";
 
 // Employee pages depend on cookies and live campaign data; never prerender at build time.
 export const dynamic = "force-dynamic";
@@ -12,10 +13,24 @@ export default async function EmployeeLayout({ children, params }: LayoutProps<"
   const [campaign, lang] = await Promise.all([loadCampaign(slug), getLang()]);
   const t = dict(lang);
   const other = lang === "en" ? "es" : "en";
+  const theme = pageThemeAttrs({
+    bgPattern: campaign.bgPattern,
+    bgColor: campaign.bgColor,
+    bgColor2: campaign.bgColor2,
+    bgImageUrl: campaign.bgImageId ? `/api/images/${campaign.bgImageId}` : null,
+    bgOverlay: campaign.bgOverlay,
+    textMode: campaign.textMode,
+    fontStyle: campaign.fontStyle,
+    cardStyle: campaign.cardStyle,
+    accentColor: campaign.accentColor,
+  });
   return (
     <div
-      className="min-h-screen bg-slate-50"
-      style={{ ["--brand-primary" as string]: campaign.primaryColor, ["--brand-accent" as string]: campaign.accentColor }}
+      className="min-h-screen"
+      data-page-theme
+      data-text={theme.textMode}
+      data-card-style={theme.cardStyle}
+      style={{ ...theme.style, ["--brand-primary" as string]: campaign.primaryColor, ["--brand-accent" as string]: campaign.accentColor }}
     >
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
@@ -41,7 +56,7 @@ export default async function EmployeeLayout({ children, params }: LayoutProps<"
         </div>
       </header>
       {children}
-      <footer className="py-8 text-center text-xs text-slate-400">{t.poweredBy}</footer>
+      <footer className="theme-muted py-8 text-center text-xs text-slate-400">{t.poweredBy}</footer>
     </div>
   );
 }

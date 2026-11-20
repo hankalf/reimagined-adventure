@@ -23,6 +23,16 @@ export default async function BrandingPage({ params }: PageProps<"/admin/campaig
         leadershipMessage: c.leadershipMessage ?? "",
         leadershipMessageEs: c.leadershipMessageEs ?? "",
         leadershipName: c.leadershipName ?? "",
+        pageLook: {
+          bgPattern: c.bgPattern,
+          bgColor: c.bgColor,
+          bgColor2: c.bgColor2,
+          bgImageId: c.bgImageId,
+          bgOverlay: c.bgOverlay,
+          textMode: c.textMode,
+          fontStyle: c.fontStyle,
+          cardStyle: c.cardStyle,
+        },
         mascotEnabled: c.mascotEnabled,
         mascots: c.mascots.map((m) => ({
           id: m.id,

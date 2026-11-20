@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { MascotsEditor, type MascotValues } from "./mascots-editor";
+import { PageLookEditor, type PageLookValues } from "./page-look-editor";
 import { updateBrandingAction, type FormState } from "../../actions";
 
 type Branding = {
@@ -23,6 +24,7 @@ type Branding = {
   leadershipName: string;
   mascotEnabled: boolean;
   mascots: MascotValues[];
+  pageLook: PageLookValues;
   videoUrl: string;
   showPickCount: boolean;
   notifyEmployeesOnReceived: boolean;
@@ -133,6 +135,8 @@ export function BrandingForm({ campaign }: { campaign: Branding }) {
           <p className="text-sm font-semibold text-white">Preview of your colours</p>
         </div>
       </section>
+
+      <PageLookEditor initial={campaign.pageLook} primary={primary} accent={accent} setPrimary={setPrimary} setAccent={setAccent} headline={campaign.welcomeHeadline} />
 
       <section className="card space-y-4 p-5">
         <h2 className="font-semibold">Text employees see</h2>

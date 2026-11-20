@@ -124,6 +124,16 @@ model Campaign {
   showPickCount             Boolean @default(true)
   notifyEmployeesOnReceived Boolean @default(false)
 
+  // Employee page look: background (pattern / gradient / uploaded image), text contrast, font, card style
+  bgPattern  String  @default("none")
+  bgColor    String  @default("#f8fafc")
+  bgColor2   String  @default("#e2e8f0")
+  bgImageId  String?
+  bgOverlay  Int     @default(35)
+  textMode   String  @default("auto")
+  fontStyle  String  @default("modern")
+  cardStyle  String  @default("solid")
+
   // Holiday mascots: master switch; the mascots themselves are in CampaignMascot
   mascotEnabled     Boolean @default(false)
 

@@ -48,17 +48,17 @@ export default async function LandingPage({ params, searchParams }: PageProps<"/
             // eslint-disable-next-line @next/next/no-img-element
             <img src={`/api/images/${campaign.heroImageId}`} alt="" className="mb-6 h-56 w-full rounded-2xl object-cover shadow-sm md:h-72" />
           )}
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl" style={{ color: campaign.primaryColor }}>
+          <h1 className="theme-text text-3xl font-bold tracking-tight text-slate-900 md:text-4xl" style={{ color: campaign.primaryColor }}>
             {headline}
           </h1>
-          {message && <p className="mt-4 whitespace-pre-line text-lg text-slate-700">{message}</p>}
+          {message && <p className="theme-muted mt-4 whitespace-pre-line text-lg text-slate-700">{message}</p>}
           {deadline && (
-            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-sm font-medium text-slate-800" style={{ backgroundColor: `${campaign.accentColor}26` }}>
+            <p className="theme-pill mt-4 inline-flex items-center gap-2 rounded-full bg-accent/15 px-3 py-1 text-sm font-medium text-slate-800" style={{ backgroundColor: `${campaign.accentColor}26` }}>
               ⏳ {deadline}
               {campaign.closesAt && <span className="text-slate-500">· {fill(t.landing.closesOn, { date: formatDate(campaign.closesAt, lang) })}</span>}
             </p>
           )}
-          {pickCount >= 3 && <p className="mt-3 text-sm text-slate-600" data-pick-count>👥 {fill(t.landing.pickCount, { n: pickCount })}</p>}
+          {pickCount >= 3 && <p className="theme-muted mt-3 text-sm text-slate-600" data-pick-count>👥 {fill(t.landing.pickCount, { n: pickCount })}</p>}
           {video && (
             <div className="mt-6 overflow-hidden rounded-2xl bg-black shadow-sm" data-video>
               {video.kind === "iframe" ? (

@@ -425,6 +425,25 @@ try {
     await ph.waitForURL(new RegExp(`/g/${SLUG}/pick`));
     await ph.waitForSelector("[data-card]");
     assert(await ph.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${device}: no sideways scrolling on the gift grid`);
+    // The sheet fits the screen and the page behind it stays put.
+    const y0 = await ph.evaluate(() => {
+      window.scrollTo(0, 150);
+      return window.scrollY;
+    });
+    await ph.locator("li", { hasText: "Company Hoodie" }).locator("[data-card]").click();
+    await ph.waitForSelector("[data-sheet]");
+    const sheetBox = await ph.locator("[data-sheet]").boundingBox();
+    assert(sheetBox && sheetBox.y >= 0 && sheetBox.y + sheetBox.height <= vh + 1, `${device}: gift sheet fits the screen (top ${Math.round(sheetBox?.y)}, bottom ${Math.round(sheetBox?.y + sheetBox?.height)} of ${vh})`);
+    assert((await ph.evaluate(() => document.body.style.position)) === "fixed", `${device}: page behind the sheet is locked`);
+    await ph.mouse.move(sheetBox.x + sheetBox.width / 2, sheetBox.y + sheetBox.height / 2);
+    await ph.mouse.wheel(0, 900);
+    await ph.mouse.move(sheetBox.x + 10, Math.max(5, sheetBox.y - 20));
+    await ph.mouse.wheel(0, 900);
+    await ph.waitForTimeout(150);
+    assert((await ph.evaluate(() => document.body.style.top)) === `-${y0}px`, `${device}: scrolling on the sheet or the dimmed area doesn't move the page`);
+    await ph.locator('[data-sheet] button[aria-label="Close"]').first().click();
+    await ph.waitForSelector("[data-sheet]", { state: "detached" });
+    assert((await ph.evaluate(() => [window.scrollY, document.body.style.position].join("|"))) === `${y0}|`, `${device}: page unlocked at the same scroll position after closing`);
     await ph.locator("li", { hasText: "Company Hoodie" }).locator("[data-card]").click();
     await ph.waitForSelector("[data-sheet]");
     const chooseBox = await ph.locator('[data-sheet-actions] button:has-text("Choose this gift")').boundingBox();
@@ -658,7 +677,8 @@ try {
   assert((await group.locator("text=Size: L").count()) === 1, "grouped row shows the chosen size");
   assert((await a.locator("tr", { hasText: "Company Hoodie" }).first().locator('a:has-text("Open")').count()) === 1, "Amazon link present in grouped row");
   const currentPrice = Number(await group.locator('input[name="unitCost"]').inputValue());
-  const paidPrice = (currentPrice + 1.25).toFixed(2);
+  // Confirm a different price, kept in a fixed range so repeated runs never push the hoodie over the $75 test budget.
+  const paidPrice = (currentPrice >= 60 ? 55 : currentPrice + 1.25).toFixed(2);
   await group.locator('input[name="unitCost"]').fill(paidPrice);
   await group.locator('button:has-text("Mark 1 ordered")').click();
   await a.waitForSelector("text=Mark 1 received");
@@ -739,6 +759,22 @@ try {
   assert((await a.locator("[data-not-picked-row]").count()) === 1, "one department can be printed on its own");
   await shot(a, "not-picked");
   ok("not-picked list: grouped by department, Last, First, tick boxes, page per department or one list, single-department print");
+
+  section("Live progress tab for launch day");
+  await a.goto(`${BASE}/admin/campaigns/${campaignId}/live`);
+  await a.waitForSelector("[data-live-hero]");
+  const heroText = await a.locator("[data-live-hero]").innerText();
+  assert(/25%/.test(heroText) && /1\s+of 4 eligible/.test(heroText), `hero shows 1 of 4 picked = 25% (${heroText.replace(/\n/g, " ")})`);
+  assert(/\b3\b/.test(await a.locator('[data-live-kpi="Still to pick"]').innerText()), "3 still to pick");
+  const liveDepts = await a.locator("[data-live-dept]").evaluateAll((els) => els.map((el) => el.getAttribute("data-live-dept")));
+  assert(liveDepts.at(-1) === "Ops" && liveDepts.length === 4, `departments lowest first, Ops (100%) last (${liveDepts.join(", ")})`);
+  assert((await a.locator("[data-live-hour]").count()) === 12, "12 hourly bars");
+  const hourTotal = (await a.locator("[data-live-hour]").evaluateAll((els) => els.map((el) => Number(el.getAttribute("data-live-hour"))))).reduce((x, y) => x + y, 0);
+  assert(hourTotal >= 1, `this run's pick shows in the hourly chart (${hourTotal})`);
+  assert((await a.locator('[data-live-gift="Company Hoodie"]').count()) === 1, "top gifts list the hoodie");
+  assert((await a.locator("[data-live-recent]").innerText()).includes("Test1 G."), "latest picks show Test1");
+  await shot(a, "live");
+  ok("Live tab: % picked, still to pick, departments lowest first, picks per hour (ET), top gifts, latest picks");
 
   section("Budget tab totals");
   await a.goto(`${BASE}/admin/campaigns/${campaignId}/budget`);

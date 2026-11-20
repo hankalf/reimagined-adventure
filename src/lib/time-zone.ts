@@ -55,3 +55,13 @@ export function excelEastern(instant: Date | null | undefined): Date | null {
   if (!instant) return null;
   return new Date(instant.getTime() + zoneOffsetMs(instant.getTime(), APP_TIME_ZONE));
 }
+
+/** Today's date in Eastern Time, as a calendar date (midnight UTC), e.g. for "picks today". */
+export function easternCalendarDate(instant: Date): Date {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: APP_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(instant)
+      .map((p) => [p.type, p.value]),
+  );
+  return new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+}

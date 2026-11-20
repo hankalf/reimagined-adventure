@@ -269,12 +269,26 @@ function ItemDialog({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Freeze the page behind the sheet. `overflow: hidden` alone doesn't stop iPhone Safari from scrolling the page
+  // underneath, so pin the body in place and put the scroll position back when the sheet closes.
+  useEffect(() => {
+    const y = window.scrollY;
+    const body = document.body.style;
+    const html = document.documentElement.style;
+    const saved = { position: body.position, top: body.top, left: body.left, right: body.right, width: body.width, overflow: body.overflow, htmlOverflow: html.overflow, overscroll: html.overscrollBehavior };
+    Object.assign(body, { position: "fixed", top: `-${y}px`, left: "0", right: "0", width: "100%", overflow: "hidden" });
+    html.overflow = "hidden";
+    html.overscrollBehavior = "none";
+    return () => {
+      Object.assign(body, { position: saved.position, top: saved.top, left: saved.left, right: saved.right, width: saved.width, overflow: saved.overflow });
+      html.overflow = saved.htmlOverflow;
+      html.overscrollBehavior = saved.overscroll;
+      window.scrollTo(0, y);
+    };
+  }, []);
 
   const confirmText = fill(
     !allowChange ? t.pick.confirmBodyLocked : changeDeadline ? t.pick.confirmBodyUntil : changeWindowHours ? t.pick.confirmBodyWindow : t.pick.confirmBody,
@@ -287,13 +301,13 @@ function ItemDialog({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 sm:items-center sm:p-6" onClick={onClose} role="presentation">
+    <div className="sheet-overlay fixed inset-x-0 top-0 z-50 flex items-end justify-center overscroll-none bg-slate-900/60 sm:items-center sm:p-6" onClick={onClose} role="presentation" data-sheet-overlay>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="item-dialog-title"
         data-sheet
-        className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-xl sm:max-h-[90dvh] sm:rounded-2xl"
+        className="sheet-max flex w-full max-w-3xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <form action={action} className="flex min-h-0 flex-1 flex-col">
@@ -303,7 +317,7 @@ function ItemDialog({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="grid sm:grid-cols-2">
               <div className="flex flex-col bg-slate-100">
-                <div className="relative h-[min(40dvh,22rem)] sm:h-auto sm:aspect-square" {...swipe}>
+                <div className="sheet-photo relative sm:aspect-square" {...swipe}>
                   <span aria-hidden className="absolute left-1/2 top-2 z-10 h-1.5 w-10 -translate-x-1/2 rounded-full bg-black/25 sm:hidden" />
                   {src ? (
                     // eslint-disable-next-line @next/next/no-img-element

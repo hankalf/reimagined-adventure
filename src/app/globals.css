@@ -260,3 +260,31 @@ html {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Phone gift sheet sized to the visible screen. Each size is given twice: plain vh first for phones whose browser
+   doesn't know dvh (iOS before 15.4, older Android Chrome), then dvh, which follows Safari's moving toolbars. */
+.page-min-h {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.sheet-overlay {
+  height: 100vh;
+  height: 100dvh;
+}
+.sheet-max {
+  max-height: 90vh;
+  max-height: calc(100dvh - max(1.5rem, env(safe-area-inset-top)));
+}
+.sheet-photo {
+  height: min(34vh, 20rem);
+  height: min(34dvh, 20rem);
+}
+@media (min-width: 640px) {
+  .sheet-max {
+    max-height: 90vh;
+    max-height: 90dvh;
+  }
+  .sheet-photo {
+    height: auto;
+  }
+}

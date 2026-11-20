@@ -46,7 +46,7 @@ export default async function EmployeeLayout({ children, params }: LayoutProps<"
   });
   return (
     <div
-      className="flex min-h-dvh flex-col"
+      className="page-min-h flex flex-col"
       data-page-theme
       data-text={theme.textMode}
       data-card-style={theme.cardStyle}
